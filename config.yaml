@@ -378,10 +378,10 @@ spots:
 #     weight: 2                    # toca 2x mais (padrão: 1)
 #     max_per_day: 5
 #
-  - id: aviso-reuniao
-    type: tts
-    text: "Atenção colaboradores: reunião geral às 15h na sala principal."
-    voice: "pt-BR-AntonioNeural"   # opcional — usa vinheta.voice se omitido
+  # - id: aviso-reuniao
+  #   type: tts
+  #   text: "Atenção colaboradores: reunião geral às 15h na sala principal."
+  #   voice: "pt-BR-AntonioNeural"   # opcional — usa vinheta.voice se omitido
 #
 #   - id: chamada-produto
 #     type: llm
