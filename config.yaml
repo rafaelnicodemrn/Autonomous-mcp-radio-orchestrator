@@ -350,6 +350,19 @@ sources:
       # passage: jo:3:16                # referência exata (usado se mode=passage)
       max_items: 3
 
+  # ── Plugin: WhatsApp (Exportação Manual) ─────────────────────────────────────
+  # Exportar: WhatsApp → Grupo → ⋮ → Mais → Exportar conversa → Sem mídia
+  # Configure um id diferente para cada grupo que quiser transformar em episódio.
+  # - id: grupo-trabalho
+  #   type: whatsapp
+  #   name: "Grupo do Trabalho"
+  #   enabled: true
+  #   settings:
+  #     path: "/caminho/para/exportacao.zip"   # arquivo .zip ou pasta com vários .zips
+  #     days_lookback: 1                        # quantos dias incluir no episódio
+  #     max_messages: 150                       # limite de mensagens enviadas ao LLM
+  #     ignore_media: true                      # ignora linhas de mídia (foto, vídeo, áudio)
+
 # 1, 2 ou 3 narradores. Remova ou comente entradas para reduzir.
 # Vozes pt-BR disponiveis (apenas 3):
 #   pt-BR-ThalitaMultilingualNeural (Female)
