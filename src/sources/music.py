@@ -175,7 +175,7 @@ def download_cache(source_config: dict) -> int:
                     'file':   os.path.basename(path),
                 }
                 downloaded += 1
-        _save_catalog(catalog)
+                _save_catalog(catalog)   # salva após cada faixa — seguro contra interrupções
     except Exception as e:
         print(f"  [jamendo] erro: {e}")
 
