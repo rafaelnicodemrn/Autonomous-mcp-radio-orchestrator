@@ -8,7 +8,7 @@ app = Flask(__name__)
 OUTPUT_DIR = 'output'
 MUSIC_DIR  = 'music'
 
-POLL_INTERVAL_SECONDS = 60   # frequencia de verificacao de novos episodios
+POLL_INTERVAL_SECONDS = 20   # frequencia de verificacao de novos episodios
 
 FALLBACK_INTRO_PATH  = os.path.join('output', '_fallback_intro.mp3')
 FALLBACK_INTRO_TEXT  = 'Enquanto aguardamos novos episódios, fiquem com algumas músicas selecionadas para você.'
