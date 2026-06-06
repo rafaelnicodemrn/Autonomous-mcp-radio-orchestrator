@@ -986,6 +986,7 @@ radioIA/
 │   ├── url.py                   # episódio a partir de URL avulsa
 │   ├── biblia.py                # passagens bíblicas (ABíbliaDigital)
 │   ├── concursos_pci.py         # concursos públicos (PCI Concursos)
+│   ├── whatsapp.py              # resumo de grupo WhatsApp (exportação manual)
 │   └── exemplo_plugin.py        # template para novos plugins
 ├── music/                       # músicas locais para o fallback do player
 └── output/                      # episódios gerados (não versionar)
@@ -1150,6 +1151,7 @@ plugins/
 |--------|--------|-----------|------------|
 | `concursos_pci.py` | `concursos_pci` | Notícias de concursos públicos (PCI Concursos) | `beautifulsoup4`, `trafilatura` |
 | `biblia.py` | `biblia` | Passagens bíblicas com reflexão (ABíbliaDigital) | `requests`, token em `ABIBLIADIGITAL_TOKEN` |
+| `whatsapp.py` | `whatsapp` | Resumo de grupo do WhatsApp a partir de exportação manual | — |
 
 **Configuração do plugin Bíblia** (`config.yaml`):
 
@@ -1166,6 +1168,24 @@ plugins/
     # passage: jo:3:16                # referência exata (mode: passage)
     max_items: 1
 ```
+
+**Configuração do plugin WhatsApp** (`config.yaml`):
+
+Exporte a conversa pelo WhatsApp: **Grupo → ⋮ → Mais → Exportar conversa → Sem mídia**. Configure um `id` diferente para cada grupo.
+
+```yaml
+- id: grupo-trabalho
+  type: whatsapp
+  name: "Grupo do Trabalho"
+  enabled: true
+  settings:
+    path: "/caminho/para/exportacao.zip"   # arquivo .zip ou pasta com vários .zips
+    days_lookback: 1                        # quantos dias incluir no episódio
+    max_messages: 150                       # limite de mensagens enviadas ao LLM
+    ignore_media: true                      # ignora linhas de mídia (foto, vídeo, áudio)
+```
+
+Suporta os formatos de exportação Android e iOS. Se `path` for uma pasta, usa o `.zip` modificado mais recentemente. Múltiplos grupos podem ser configurados com ids distintos e o mesmo `type: whatsapp`.
 
 Consulte o guia completo com contrato, exemplos e boas práticas:
 
