@@ -137,7 +137,10 @@ def generate_script(items: list[dict], narrators: list[dict], source_config: dic
     source_name = source_config.get('name', station_name)
     names = [nr['name'] for nr in active]
 
-    if source_type == 'biblia':
+    if source_type == 'whatsapp':
+        cards = [_build_whatsapp_card(i, item) for i, item in enumerate(items, 1)]
+        prompt = _whatsapp_prompt(active, names, source_name, '\n\n'.join(cards), is_first_of_day, station_name)
+    elif source_type == 'biblia':
         cards = [_build_biblia_card(i, item) for i, item in enumerate(items, 1)]
         prompt = _biblia_prompt(active, names, source_name, '\n\n'.join(cards), is_first_of_day, station_name)
     elif source_type == 'filmes':
@@ -559,6 +562,77 @@ REGRAS:
 {solo_note}
 
 FILMES:
+{content}
+
+Roteiro:"""
+
+
+def _build_whatsapp_card(i: int, item: dict) -> str:
+    return (
+        f"[Grupo: {item['title']}]\n"
+        f"{item.get('text', '')}"
+    )
+
+
+def _whatsapp_prompt(narrators: list[dict], names: list[str], source_name: str,
+                     content: str, is_first_of_day: bool = True,
+                     station_name: str = 'RadioIA') -> str:
+    n = len(narrators)
+    narrator_block = _narrator_block(narrators)
+    format_block   = _format_block(narrators)
+    names_str = ', '.join(names[:-1]) + f' e {names[-1]}' if n > 1 else names[0]
+
+    solo_note = (
+        "- Apresentacao solo: comente os assuntos diretamente com o ouvinte, tom de conversa"
+        if n == 1 else
+        f"- Distribua as falas de forma equilibrada entre os {n} apresentadores"
+    )
+
+    if is_first_of_day:
+        abertura = (
+            f"1. ABERTURA: {names_str} dao bom dia, dizem que os ouvintes estao na {station_name} "
+            f'e apresentam o quadro "{source_name}" — o resumo do que rolou no grupo (2-3 falas)'
+        )
+        encerramento = "4. Encerramento: convide o ouvinte a continuar na programacao (1-2 falas)"
+    else:
+        abertura = (
+            f'1. ENTRADA: entre direto no assunto — "O grupo {source_name} esteve movimentado...", '
+            f'"Olha o que rolou no grupo hoje..." ou similar. SEM bom dia. (1-2 falas)'
+        )
+        encerramento = "4. Encerramento curto sinalizando que a programacao continua (1 fala)"
+
+    return f"""Voce e um roteirista de radio FM brasileira especializado em resumos de grupos de mensagens.
+Crie o roteiro do segmento "{source_name}" — o resumo do que aconteceu no grupo de WhatsApp.
+
+APRESENTADORES:
+{narrator_block}
+
+{format_block}
+
+ATENCAO: responda APENAS com as linhas do roteiro no formato acima. Sem titulos, sem markdown, sem asteriscos, sem tracejados, sem comentarios fora do roteiro. Use português correto com todos os acentos (ã, é, ê, ç, à, â, í, ó, ô, ú etc.) — nunca escreva "voce", "nao", "tambem", escreva "você", "não", "também".
+
+PERSONALIDADES: respeite o perfil de cada apresentador em todas as falas.
+
+TAREFA:
+Leia as mensagens do grupo e identifique os temas, discussões e momentos mais relevantes ou interessantes.
+NÃO leia as mensagens na íntegra — sintetize como um quadro de rádio descontraído.
+Preserve o tom e o humor das conversas quando relevante.
+
+ESTRUTURA:
+{abertura}
+2. Destaque os principais assuntos discutidos no grupo (3-5 falas por tema)
+3. Mencione momentos engraçados, decisões tomadas ou informações importantes compartilhadas
+{encerramento}
+
+REGRAS:
+- Cada fala: máximo 2 sentenças
+- Não cite nomes completos de pessoas — use "um membro do grupo", "alguém no grupo" ou primeiro nome apenas
+- Tom: descontraído, como quem conta fofoca boa para um amigo
+- Não invente informações além do que está nas mensagens
+- Se o grupo tratou de assuntos sensíveis ou privados, seja discreto e genérico
+{solo_note}
+
+MENSAGENS DO GRUPO:
 {content}
 
 Roteiro:"""
