@@ -54,20 +54,35 @@ def _source_name(entry) -> str:
     return 'Fonte desconhecida'
 
 
-def _fetch_content(url: str, max_chars: int) -> tuple[str, str, str]:
-    """Retorna (título, texto, url_canonica) extraídos via trafilatura."""
+def _resolve_url(url: str) -> str:
+    """Segue redirects HTTP e retorna a URL final do artigo original."""
+    import requests
     try:
-        downloaded = trafilatura.fetch_url(url)
+        resp = requests.head(url, allow_redirects=True, timeout=10,
+                             headers={'User-Agent': 'Mozilla/5.0'})
+        final = resp.url
+        # Descarta se ainda for domínio do Google
+        if 'google.com' in final:
+            return url
+        return final
+    except Exception:
+        return url
+
+
+def _fetch_content(url: str, max_chars: int) -> tuple[str, str, str]:
+    """Retorna (título, texto, url_final) — url_final é a URL do site original."""
+    final_url = _resolve_url(url)
+    try:
+        downloaded = trafilatura.fetch_url(final_url)
         if not downloaded:
-            return '', '', ''
+            return '', '', final_url
         text  = trafilatura.extract(downloaded, include_comments=False,
                                     include_tables=False, no_fallback=False) or ''
         meta  = trafilatura.extract_metadata(downloaded)
-        title     = (meta.title if meta else '') or ''
-        canonical = (meta.url   if meta else '') or ''
-        return title, text[:max_chars], canonical
+        title = (meta.title if meta else '') or ''
+        return title, text[:max_chars], final_url
     except Exception:
-        return '', '', ''
+        return '', '', final_url
 
 
 def _rss_summary(entry) -> str:
