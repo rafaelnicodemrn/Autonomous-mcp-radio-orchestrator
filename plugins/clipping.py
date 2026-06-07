@@ -32,6 +32,7 @@ import trafilatura
 
 GOOGLE_NEWS_RSS  = "https://news.google.com/rss/search?q={query}&hl=pt-BR&gl=BR&ceid=BR:pt-419"
 MAX_CONTENT_CHARS = 2000
+RSS_FETCH_LIMIT   = 20   # máximo de entradas a processar do RSS por query
 
 
 def _pub_date(entry) -> date | None:
@@ -73,49 +74,35 @@ def _rss_summary(entry) -> str:
     return re.sub(r'<[^>]+>', '', raw).strip()
 
 
-def fetch(source_config: dict, credentials=None) -> list[dict]:
-    settings      = source_config.get('settings') or {}
-    topic         = settings.get('topic', '').strip()
-    max_sources   = int(settings.get('max_sources', 5))
-    days_lookback = int(settings.get('days_lookback', 1))
-    fetch_full    = settings.get('fetch_content', True)
-    max_chars     = int(settings.get('max_content_chars', MAX_CONTENT_CHARS))
+def _build_query(topic: str, followup: bool, days_lookback: int) -> str:
+    """Monta a query do Google News. Em modo followup, restringe a artigos recentes."""
+    query = topic
+    if followup:
+        since = (date.today() - timedelta(days=max(1, days_lookback))).isoformat()
+        query = f'{topic} after:{since}'
+    return GOOGLE_NEWS_RSS.format(query=urllib.parse.quote(query))
 
-    if not topic:
-        print('  [clipping] nenhum tópico informado. Use: python main.py "clipping:seu tópico"')
-        return []
 
-    print(f'  Buscando cobertura: "{topic}"')
-
-    url  = GOOGLE_NEWS_RSS.format(query=urllib.parse.quote(topic))
+def _fetch_entries(url: str, since: date, max_entries: int,
+                   seen_urls: set, fetch_full: bool, max_chars: int,
+                   topic: str, source_config: dict) -> list[dict]:
+    """Processa entradas do RSS e retorna items prontos (sem cap de max_sources)."""
     feed = feedparser.parse(url)
-
-    if not feed.entries:
-        print('  [clipping] nenhum resultado encontrado.')
-        return []
-
-    since = date.today() - timedelta(days=days_lookback)
     items = []
-    seen  = set()
     today = date.today().isoformat()
 
-    for entry in feed.entries:
-        if len(items) >= max_sources:
-            break
-
+    for entry in feed.entries[:max_entries]:
         pub = _pub_date(entry)
         if pub and pub < since:
             continue
 
         entry_url = entry.get('link', '').strip()
-        if not entry_url or entry_url in seen:
+        if not entry_url or entry_url in seen_urls:
             continue
-        seen.add(entry_url)
+        seen_urls.add(entry_url)
 
-        source = _source_name(entry)
+        source    = _source_name(entry)
         rss_title = entry.get('title', source)
-
-        # Remove o nome do veículo do título se vier duplicado ("Título - Veículo")
         clean_title = rss_title
         if rss_title.endswith(f' - {source}'):
             clean_title = rss_title[: -(len(source) + 3)].strip()
@@ -130,15 +117,12 @@ def fetch(source_config: dict, credentials=None) -> list[dict]:
                 text = fetched_text
             if fetched_title:
                 title = fetched_title
-
         if not text:
             text = _rss_summary(entry)
-
         if not text:
             continue
 
         uid = hashlib.md5(entry_url.encode()).hexdigest()[:8]
-
         items.append({
             'id':           f'clipping-{uid}-{today}',
             'title':        title,
@@ -151,6 +135,31 @@ def fetch(source_config: dict, credentials=None) -> list[dict]:
             'comments':     [],
             'channel':      topic,
         })
+
+    return items
+
+
+def fetch(source_config: dict, credentials=None) -> list[dict]:
+    settings      = source_config.get('settings') or {}
+    topic         = settings.get('topic', '').strip()
+    days_lookback = int(settings.get('days_lookback', 1))
+    fetch_full    = settings.get('fetch_content', True)
+    max_chars     = int(settings.get('max_content_chars', MAX_CONTENT_CHARS))
+    followup      = bool(settings.get('followup', False))
+
+    if not topic:
+        print('  [clipping] nenhum tópico informado. Use: python main.py "clipping:seu tópico"')
+        return []
+
+    mode = 'followup' if followup else 'primeira cobertura'
+    print(f'  Buscando cobertura [{mode}]: "{topic}"')
+
+    since    = date.today() - timedelta(days=days_lookback)
+    seen_urls: set = set()
+
+    url   = _build_query(topic, followup, days_lookback)
+    items = _fetch_entries(url, since, RSS_FETCH_LIMIT, seen_urls,
+                           fetch_full, max_chars, topic, source_config)
 
     print(f'  {len(items)} veículo(s) encontrado(s) sobre "{topic}".')
     return items

@@ -276,6 +276,11 @@ def _run_source(source_config: dict, config: dict, credentials, seen_ids: set,
     if skipped:
         print(f"  {skipped} item(s) ignorado(s) — ja citados anteriormente.")
 
+    # Clipping: limita ao max_sources APÓS o filtro de histórico
+    if source_type == 'clipping':
+        max_sources = int((source_config.get('settings') or {}).get('max_sources', 5))
+        items = items[:max_sources]
+
     # Se poucos itens novos, expande o periodo de busca e complementa
     # (não se aplica a fontes com número fixo de itens como horoscopo/trivia)
     settings = source_config.get('settings') or {}
