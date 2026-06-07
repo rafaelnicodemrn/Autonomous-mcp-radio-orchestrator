@@ -430,8 +430,10 @@ def main():
     # Extrai replay: direto do argv para suportar múltiplos (replay:X replay:Y)
     replay_targets = [a.split(':', 1)[1] for a in sys.argv[1:] if a.startswith('replay:')]
     # Extrai URLs avulsas: url:https://... → fonte sintética, sem precisar de config
-    url_targets = [v for k, v in cli.items() if k == 'url' and v]
-    cli_clean   = {k: v for k, v in cli.items() if k not in ('url', 'replay')}
+    url_targets     = [v for k, v in cli.items() if k == 'url' and v]
+    # Extrai clippings: clipping:tema → fonte sintética, sem precisar de config
+    clipping_targets = [v for k, v in cli.items() if k == 'clipping' and v]
+    cli_clean   = {k: v for k, v in cli.items() if k not in ('url', 'replay', 'clipping')}
     requested   = set(cli_clean.keys())
 
     all_sources = config.get('sources', [])
@@ -443,7 +445,7 @@ def main():
             print(f"Fonte(s) desconhecida(s): {', '.join(unknown)}")
             print(f"Disponiveis: {available}")
             sys.exit(1)
-    elif not url_targets and not replay_targets:
+    elif not url_targets and not clipping_targets and not replay_targets:
         # Sem args: roda tudo habilitado
         sources = [s for s in all_sources if s.get('enabled', True)]
     else:
@@ -456,6 +458,18 @@ def main():
             'name':     'Conteúdo da Web',
             'enabled':  True,
             'settings': {'url': target_url},
+        })
+
+    for topic in clipping_targets:
+        # Mescla defaults do config (se existir fonte id=clipping) com o tópico CLI
+        base = next((s for s in all_sources if s['id'] == 'clipping'), {})
+        sources.append({
+            **base,
+            'id':      'clipping',
+            'type':    'clipping',
+            'name':    f"Clipping — {topic[:60]}",
+            'enabled': True,
+            'settings': {**(base.get('settings') or {}), 'topic': topic},
         })
 
     if not sources and not replay_targets:
