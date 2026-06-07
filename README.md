@@ -986,6 +986,7 @@ radioIA/
 │   ├── url.py                   # episódio a partir de URL avulsa
 │   ├── biblia.py                # passagens bíblicas (ABíbliaDigital)
 │   ├── concursos_pci.py         # concursos públicos (PCI Concursos)
+│   ├── clipping.py              # panorama de cobertura midiática sobre um tema
 │   ├── whatsapp.py              # resumo de grupo WhatsApp (exportação manual)
 │   └── exemplo_plugin.py        # template para novos plugins
 ├── music/                       # músicas locais para o fallback do player
@@ -1151,6 +1152,7 @@ plugins/
 |--------|--------|-----------|------------|
 | `concursos_pci.py` | `concursos_pci` | Notícias de concursos públicos (PCI Concursos) | `beautifulsoup4`, `trafilatura` |
 | `biblia.py` | `biblia` | Passagens bíblicas com reflexão (ABíbliaDigital) | `requests`, token em `ABIBLIADIGITAL_TOKEN` |
+| `clipping.py` | `clipping` | Panorama de como a mídia cobre um tema — gerado via CLI | — |
 | `whatsapp.py` | `whatsapp` | Resumo de grupo do WhatsApp a partir de exportação manual | — |
 
 **Configuração do plugin Bíblia** (`config.yaml`):
@@ -1186,6 +1188,30 @@ Exporte a conversa pelo WhatsApp: **Grupo → ⋮ → Mais → Exportar conversa
 ```
 
 Suporta os formatos de exportação Android e iOS. Se `path` for uma pasta, usa o `.zip` modificado mais recentemente. Múltiplos grupos podem ser configurados com ids distintos e o mesmo `type: whatsapp`.
+
+**Plugin Clipping** — panorama de cobertura midiática:
+
+Busca no Google News como diferentes veículos estão abordando um tema e gera um episódio no estilo "o que a imprensa está dizendo sobre X". Não requer entrada no `config.yaml` — o tópico é sempre passado via CLI:
+
+```bash
+python main.py "clipping:queda de avião da empresa xyz"
+python main.py "clipping:eleições municipais 2026"
+python main.py "clipping:nova atualização do iPhone"
+```
+
+O episódio compara os ângulos de cada veículo ("O G1 destaca...", "Segundo a CNN Brasil..."), aponta convergências e divergências, e exibe todos os links nas notas do player. Para personalizar os defaults, adicione ao `config.yaml`:
+
+```yaml
+- id: clipping
+  type: clipping
+  name: "Clipping"
+  enabled: true
+  settings:
+    max_sources: 5          # máximo de veículos a incluir (padrão: 5)
+    days_lookback: 1        # só artigos dos últimos N dias (padrão: 1)
+    fetch_content: true     # extrai texto completo via trafilatura (padrão: true)
+    max_content_chars: 2000 # limite de caracteres por artigo (padrão: 2000)
+```
 
 Consulte o guia completo com contrato, exemplos e boas práticas:
 
