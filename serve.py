@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import webbrowser
 import threading
@@ -736,12 +737,21 @@ function appendNextScheduled() {
       if (!next) return;
       const el = document.createElement('div');
       el.className = 'ep-item ep-next';
-      el.innerHTML =
-        `<div class="ep-dot"></div>` +
-        `<div style="min-width:0">` +
-          `<div class="ep-label">${next.time_display} &mdash; ${next.label}</div>` +
-          `<div class="ep-meta">próximo na grade</div>` +
-        `</div>`;
+      if (next.scheduler_active === false) {
+        el.innerHTML =
+          `<div class="ep-dot"></div>` +
+          `<div style="min-width:0">` +
+            `<div class="ep-label">Programação parada</div>` +
+            `<div class="ep-meta">scheduler inativo</div>` +
+          `</div>`;
+      } else {
+        el.innerHTML =
+          `<div class="ep-dot"></div>` +
+          `<div style="min-width:0">` +
+            `<div class="ep-label">${next.time_display} &mdash; ${next.label}</div>` +
+            `<div class="ep-meta">próximo na grade</div>` +
+          `</div>`;
+      }
       document.getElementById('playlist').appendChild(el);
     })
     .catch(() => {});
@@ -856,6 +866,26 @@ init();
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _is_scheduler_active() -> bool:
+    """Verifica se o scheduler está rodando via PID file."""
+    pid_file = 'scheduler.pid'
+    if not os.path.exists(pid_file):
+        return False
+    try:
+        with open(pid_file, 'r') as f:
+            pid = int(f.read().strip())
+        if sys.platform == 'win32':
+            import subprocess
+            r = subprocess.run(['tasklist', '/FI', f'PID eq {pid}', '/NH'],
+                               capture_output=True, text=True)
+            return str(pid) in r.stdout
+        else:
+            os.kill(pid, 0)
+            return True
+    except Exception:
+        return False
+
 
 def _is_date(s: str) -> bool:
     parts = s.split('-')
@@ -1020,6 +1050,9 @@ def _build_announcement() -> bytes | None:
     if not cfg.get('announcements', {}).get('enabled', True):
         return None
 
+    if not _is_scheduler_active():
+        return None
+
     schedule   = cfg.get('schedule', [])
     radio_name = cfg.get('radio', {}).get('name', 'RadioIA')
     vinheta    = cfg.get('vinheta', {})
@@ -1047,7 +1080,7 @@ def _build_announcement() -> bytes | None:
             srcs = entry.get('sources', [])
             label = 'Replay' if entry.get('replay_of') else ', '.join(str(s) for s in srcs)
         h, m = t.split(':')
-        upcoming.append({'time': t, 'display': f"{int(h)}h{m}", 'label': label})
+        upcoming.append({'time': t, 'h': int(h), 'm': int(m), 'label': label})
 
     upcoming.sort(key=lambda x: x['time'])
     upcoming = upcoming[:3]
@@ -1060,13 +1093,26 @@ def _build_announcement() -> bytes | None:
     if cache['audio'] and cache['valid_until'] == valid_until and cache['radio_name'] == radio_name:
         return cache['audio']
 
-    # Monta texto do break
-    parts = [f"{u['label']} às {u['display']}" for u in upcoming]
-    if len(parts) == 1:
-        items_text = parts[0]
-    else:
-        items_text = ', '.join(parts[:-1]) + ' e ' + parts[-1]
-    text = f"Você está na {radio_name}. Em breve: {items_text}."
+    # Converte hora para fala natural: "7 horas", "7 e meia", "meio-dia"
+    def _spoken_time(h: int, m: int) -> str:
+        if h == 0 and m == 0:
+            return 'meia-noite'
+        if h == 12 and m == 0:
+            return 'meio-dia'
+        base = f"{h} hora{'s' if h != 1 else ''}"
+        if m == 0:
+            return base
+        if m == 30:
+            return f"{h} e meia"
+        return f"{base} e {m}"
+
+    # Monta frases separadas por ponto — o TTS faz pausa natural entre elas
+    connectors = ['Em breve,', 'Depois,', 'E também,']
+    sentences = []
+    for i, u in enumerate(upcoming):
+        conn = connectors[i] if i < len(connectors) else 'E ainda,'
+        sentences.append(f"{conn} {u['label']}, às {_spoken_time(u['h'], u['m'])}.")
+    text = f"Você está ouvindo a {radio_name}. {' '.join(sentences)}"
 
     tmp = tempfile.NamedTemporaryFile(suffix='.mp3', delete=False)
     tmp.close()
@@ -1211,6 +1257,10 @@ def api_announcement():
 @app.route('/api/next-scheduled')
 def api_next_scheduled():
     _DAYS = {'mon': 0, 'tue': 1, 'wed': 2, 'thu': 3, 'fri': 4, 'sat': 5, 'sun': 6}
+
+    if not _is_scheduler_active():
+        return jsonify({'scheduler_active': False})
+
     try:
         import yaml
         from datetime import datetime as _dt
@@ -1238,7 +1288,8 @@ def api_next_scheduled():
                 sources = entry.get('sources', [])
                 label = 'Replay' if entry.get('replay_of') else ', '.join(str(s) for s in sources)
             h, m = t.split(':')
-            upcoming.append({'time': t, 'time_display': f"{int(h)}h{m}", 'label': label})
+            upcoming.append({'time': t, 'time_display': f"{int(h)}h{m}", 'label': label,
+                             'scheduler_active': True})
 
         if not upcoming:
             return jsonify(None)

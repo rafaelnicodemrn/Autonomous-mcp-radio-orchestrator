@@ -497,6 +497,11 @@ def main():
     for source_config in sources:
         # Apply CLI param overrides
         param = cli.get(source_config['id'])
+
+        # Injeta _param para que qualquer plugin possa acessar o parâmetro CLI
+        if param is not None:
+            source_config = {**source_config, '_param': param}
+
         if param is not None and source_config.get('type') == 'music':
             try:
                 n = int(param)

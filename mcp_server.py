@@ -258,6 +258,10 @@ def gerar_episodios(fontes: list[str]) -> str:
             except ValueError:
                 pass
 
+        # Injeta _param para plugins que o suportam (ex: podcast)
+        if param and source_type not in ('music', 'utility'):
+            source_cfg = {**source_cfg, '_param': param}
+
         # Executar fonte com captura de stdout
         if source_type == 'music':
             path, log, err = _capture(radio_main._run_music_source, source_cfg, config, first_of_day)
@@ -1336,6 +1340,97 @@ def gerar_clipping(topico: str, followup: bool = False) -> str:
         'status':   'erro',
         'topico':   topico,
         'mensagem': err or 'Nenhum episodio gerado. Verifique se ha artigos recentes sobre o tema.',
+        'log':      log.strip(),
+    }, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def gerar_podcast(
+    url: str,
+    nome: str = '',
+    start: int = 0,
+    duration: int = 600,
+    topic: str = '',
+    whisper_model: str = 'base',
+    show_notes_min_chars: int = 500,
+) -> str:
+    """
+    Gera um episodio de radio a partir de um podcast (RSS feed ou URL direta de MP3).
+    Usa show notes do RSS quando suficientes; caso contrario, transcreve um trecho com Whisper.
+
+    Nao requer configuracao previa no config.yaml.
+
+    Args:
+        url:                  URL do RSS feed do podcast OU URL direta do arquivo MP3.
+        nome:                 Nome do segmento na programacao (ex: "Hipsters Podcast").
+                              Se vazio, usa o titulo do feed RSS ou o nome do arquivo.
+        start:                Inicio do trecho a transcrever, em segundos (default: 0).
+                              Util para pular intro/patrocinadores.
+        duration:             Duracao do trecho a transcrever, em segundos (default: 600 = 10min).
+        topic:                Tema especifico para focar no roteiro. Se informado,
+                              o narrador se concentra nesse assunto dentro do episodio.
+        whisper_model:        Tamanho do modelo Whisper: tiny/base/small/medium/large.
+                              Modelos maiores sao mais precisos mas mais lentos.
+        show_notes_min_chars: Minimo de caracteres nas show notes para nao usar Whisper.
+                              Default: 500.
+
+    Exemplos:
+        gerar_podcast("https://feeds.feedburner.com/hipsters-ponto-tech")
+        gerar_podcast("https://feeds.example.com/podcast.rss", topic="inteligencia artificial")
+        gerar_podcast("https://media.example.com/ep42.mp3", nome="Lex Fridman", start=120, duration=900)
+    """
+    config      = _load_config()
+    all_sources = config.get('sources', [])
+    seen_ids    = load_seen_ids()
+    credentials = radio_main._get_oauth_credentials()
+    first_of_day = not radio_main._has_episodes_today()
+
+    # Mescla com configuração base de podcast, se existir
+    base = next((s for s in all_sources if s.get('type') == 'podcast'), {})
+    source_cfg = {
+        **base,
+        'id':      'podcast',
+        'type':    'podcast',
+        'name':    nome or base.get('name', 'Podcast'),
+        'enabled': True,
+        'settings': {
+            **(base.get('settings') or {}),
+            'url':                  url,
+            'whisper_start':        start,
+            'whisper_duration':     duration,
+            'whisper_model':        whisper_model,
+            'show_notes_min_chars': show_notes_min_chars,
+            **({'topic': topic} if topic else {}),
+        },
+    }
+
+    path, log, err = _capture(
+        radio_main._run_source, source_cfg, config, credentials, seen_ids, first_of_day
+    )
+
+    if path and os.path.exists(path):
+        meta_path = os.path.join(os.path.dirname(path), 'episode.json')
+        meta = {}
+        if os.path.exists(meta_path):
+            with open(meta_path, 'r', encoding='utf-8') as f:
+                meta = json.load(f)
+        dur = meta.get('duration_seconds', 0)
+        return json.dumps({
+            'status':   'ok',
+            'url':      url,
+            'nome':     meta.get('source_name', source_cfg['name']),
+            'topic':    topic or None,
+            'trecho':   f"{start // 60}-{(start + duration) // 60} min" if start else f"primeiros {duration // 60} min",
+            'duracao':  f"{dur // 60}m {dur % 60}s",
+            'itens':    meta.get('videos_covered', 0),
+            'arquivo':  path,
+            'log':      log.strip(),
+        }, ensure_ascii=False, indent=2)
+
+    return json.dumps({
+        'status':   'erro',
+        'url':      url,
+        'mensagem': err or 'Nenhum episodio gerado. Verifique se a URL e acessivel e se o Whisper esta instalado (pip install openai-whisper) caso as show notes sejam insuficientes.',
         'log':      log.strip(),
     }, ensure_ascii=False, indent=2)
 

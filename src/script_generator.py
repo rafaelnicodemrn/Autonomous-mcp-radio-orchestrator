@@ -137,7 +137,10 @@ def generate_script(items: list[dict], narrators: list[dict], source_config: dic
     source_name = source_config.get('name', station_name)
     names = [nr['name'] for nr in active]
 
-    if source_type == 'clipping':
+    if source_type == 'podcast':
+        cards  = [_build_podcast_card(i, item) for i, item in enumerate(items, 1)]
+        prompt = _podcast_prompt(active, names, source_name, '\n\n'.join(cards), is_first_of_day, station_name)
+    elif source_type == 'clipping':
         cards    = [_build_clipping_card(i, item) for i, item in enumerate(items, 1)]
         followup = bool((source_config.get('settings') or {}).get('followup', False))
         prompt   = _clipping_prompt(active, names, source_name, '\n\n'.join(cards), is_first_of_day, station_name, followup)
@@ -566,6 +569,86 @@ REGRAS:
 {solo_note}
 
 FILMES:
+{content}
+
+Roteiro:"""
+
+
+def _build_podcast_card(i: int, item: dict) -> str:
+    topic = item.get('topic', '')
+    range_label = item.get('range_label', '')
+    topic_hint = f'\nFoco: {topic}' if topic else ''
+    range_hint = f'\nTrecho coberto: {range_label}' if range_label else ''
+    return (
+        f"[Episódio {i}: {item['title']}]\n"
+        f"Podcast: {item.get('channel', item.get('source_name', ''))}"
+        f"{range_hint}{topic_hint}\n"
+        f"Conteúdo: {item.get('text', '')}"
+    )
+
+
+def _podcast_prompt(narrators: list[dict], names: list[str], source_name: str,
+                    content: str, is_first_of_day: bool = True,
+                    station_name: str = 'RadioIA') -> str:
+    n = len(narrators)
+    narrator_block = _narrator_block(narrators)
+    format_block   = _format_block(narrators)
+    names_str = ', '.join(names[:-1]) + f' e {names[-1]}' if n > 1 else names[0]
+
+    solo_note = (
+        "- Apresentação solo: conduza o resumo diretamente com o ouvinte, tom de curador de conteúdo"
+        if n == 1 else
+        f"- Distribua as falas entre os {n} apresentadores — um pode resumir enquanto o outro comenta"
+    )
+
+    if is_first_of_day:
+        abertura = (
+            f"1. ABERTURA DO DIA: {names_str} dão bom dia, dizem que os ouvintes estão na {station_name} "
+            f'e apresentam o quadro "{source_name}" — um mergulho em um podcast selecionado (2-3 falas)'
+        )
+        encerramento = "4. Encerramento: indique o podcast completo nas notas e convide a continuar na programação (2 falas)"
+    else:
+        abertura = (
+            f'1. ENTRADA: entre direto — "Chegou a hora do {source_name}!", '
+            f'"Selecionamos um episódio que vale a pena..." ou similar. SEM bom dia. (1-2 falas)'
+        )
+        encerramento = "4. Encerramento rápido indicando o link nas notas e sinalizando que a programação continua (1-2 falas)"
+
+    return f"""Você é um roteirista de rádio FM brasileira especializado em curadoria de podcasts.
+Crie o roteiro do segmento "{source_name}" — um resumo comentado de episódio(s) de podcast.
+
+APRESENTADORES:
+{narrator_block}
+
+{format_block}
+
+ATENÇÃO: responda APENAS com as linhas do roteiro no formato acima. Sem títulos, sem markdown, sem asteriscos, sem tracejados, sem comentários fora do roteiro. Use português correto com todos os acentos (ã, é, ê, ç, à, â, í, ó, ô, ú etc.) — nunca escreva "voce", "nao", "tambem", escreva "você", "não", "também".
+
+PERSONALIDADES: respeite o perfil de cada apresentador em todas as falas.
+
+TAREFA:
+Você receberá o conteúdo de um episódio de podcast (show notes e/ou transcrição de um trecho).
+Quando houver um "Foco" indicado, concentre o resumo nesse tema específico — não tente cobrir o episódio inteiro.
+Quando houver "Trecho coberto", mencione naturalmente que é um recorte do episódio (ex: "nos primeiros 10 minutos...").
+Apresente como curador que ouviu e selecionou o melhor para o ouvinte — não leia na íntegra, sintetize com opinião.
+
+ESTRUTURA:
+{abertura}
+2. Contextualize o podcast e o episódio: do que trata, por que vale ouvir (2-3 falas)
+3. Destaques do conteúdo: os pontos mais relevantes, surpreendentes ou úteis (4-6 falas)
+4. Opinião/recomendação dos apresentadores: quem deveria ouvir, em que momento (1-2 falas)
+{encerramento}
+
+REGRAS:
+- Cada fala: máximo 2 sentenças
+- Tom: entusiasmado e curioso — como quem compartilha uma descoberta com um amigo
+- Mencione o nome do podcast ao apresentar, não repita excessivamente depois
+- Diga "link do episódio nas notas" no encerramento
+- Não invente informações além do conteúdo fornecido
+- Se o conteúdo for escasso, foque na apresentação do podcast e no tema geral
+{solo_note}
+
+EPISÓDIO(S):
 {content}
 
 Roteiro:"""
