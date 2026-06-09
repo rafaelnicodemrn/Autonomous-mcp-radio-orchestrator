@@ -844,6 +844,196 @@ def remover_grade(time: str, label: str = '') -> str:
 
 # ── Tools — Sistema e manutenção ─────────────────────────────────────────────
 
+_PID_FILE = os.path.join(PROJECT_DIR, 'scheduler.pid')
+
+
+def _scheduler_pid() -> int | None:
+    """Retorna o PID salvo em scheduler.pid, ou None se nao existir."""
+    if not os.path.exists(_PID_FILE):
+        return None
+    try:
+        with open(_PID_FILE, 'r') as f:
+            return int(f.read().strip())
+    except (ValueError, OSError):
+        return None
+
+
+def _process_alive(pid: int) -> bool:
+    """Verifica se um processo com o PID dado esta rodando."""
+    try:
+        if sys.platform == 'win32':
+            import subprocess as _sp
+            r = _sp.run(['tasklist', '/FI', f'PID eq {pid}', '/NH'],
+                        capture_output=True, text=True)
+            return str(pid) in r.stdout
+        else:
+            os.kill(pid, 0)
+            return True
+    except (ProcessLookupError, PermissionError, OSError):
+        return False
+
+
+def _scheduler_status() -> dict:
+    """Retorna dict com estado real do scheduler."""
+    pid = _scheduler_pid()
+    if pid and _process_alive(pid):
+        state_path = os.path.join(PROJECT_DIR, 'scheduler_state.json')
+        age_s = None
+        if os.path.exists(state_path):
+            age_s = int(datetime.now().timestamp() - os.path.getmtime(state_path))
+        return {
+            'ativo':           True,
+            'pid':             pid,
+            'ultimo_tick_seg': age_s,
+            'dica':            'Use controlar_scheduler("stop") para encerrar.',
+        }
+
+    # PID file existe mas processo morreu — limpa o arquivo
+    if os.path.exists(_PID_FILE):
+        os.remove(_PID_FILE)
+
+    # Fallback: sem PID file, tenta heuristica pelo timestamp
+    state_path = os.path.join(PROJECT_DIR, 'scheduler_state.json')
+    if os.path.exists(state_path):
+        age_s = int(datetime.now().timestamp() - os.path.getmtime(state_path))
+        if age_s < 90:
+            return {
+                'ativo':           True,
+                'pid':             None,
+                'ultimo_tick_seg': age_s,
+                'aviso':           'Processo ativo detectado por timestamp (sem PID file — iniciado fora do MCP).',
+                'dica':            'Use controlar_scheduler("stop") com cuidado — sem PID nao e possivel encerrar automaticamente.',
+            }
+
+    return {
+        'ativo': False,
+        'pid':   None,
+        'dica':  'Use controlar_scheduler("start") para iniciar.',
+    }
+
+
+@mcp.tool()
+def controlar_scheduler(acao: str) -> str:
+    """
+    Inicia, para ou verifica o status do scheduler da RadioIA.
+
+    Args:
+        acao: "start"  — inicia o scheduler em background e salva o PID em scheduler.pid
+              "stop"   — encerra o scheduler pelo PID salvo
+              "status" — verifica se o scheduler esta rodando
+
+    O scheduler executa a grade configurada em config.yaml automaticamente.
+    Os logs sao salvos em scheduler.log na raiz do projeto.
+
+    Exemplos:
+        controlar_scheduler("status")
+        controlar_scheduler("start")
+        controlar_scheduler("stop")
+    """
+    acao = acao.strip().lower()
+
+    if acao == 'status':
+        return json.dumps({'acao': 'status', **_scheduler_status()}, ensure_ascii=False, indent=2)
+
+    if acao == 'start':
+        status = _scheduler_status()
+        if status['ativo']:
+            return json.dumps({
+                'acao':     'start',
+                'status':   'ja_rodando',
+                'pid':      status.get('pid'),
+                'mensagem': 'Scheduler ja esta ativo. Use controlar_scheduler("stop") para encerrar antes de reiniciar.',
+            }, ensure_ascii=False, indent=2)
+
+        log_path = os.path.join(PROJECT_DIR, 'scheduler.log')
+        log_file = open(log_path, 'a', encoding='utf-8')
+
+        if sys.platform == 'win32':
+            import subprocess as _sp
+            proc = _sp.Popen(
+                [sys.executable, os.path.join(PROJECT_DIR, 'scheduler.py')],
+                stdout=log_file,
+                stderr=log_file,
+                cwd=PROJECT_DIR,
+                creationflags=_sp.CREATE_NEW_PROCESS_GROUP | _sp.DETACHED_PROCESS,
+            )
+        else:
+            import subprocess as _sp
+            proc = _sp.Popen(
+                [sys.executable, os.path.join(PROJECT_DIR, 'scheduler.py')],
+                stdout=log_file,
+                stderr=log_file,
+                cwd=PROJECT_DIR,
+                start_new_session=True,
+            )
+
+        with open(_PID_FILE, 'w') as f:
+            f.write(str(proc.pid))
+
+        return json.dumps({
+            'acao':     'start',
+            'status':   'iniciado',
+            'pid':      proc.pid,
+            'log':      log_path,
+            'mensagem': f'Scheduler iniciado (PID {proc.pid}). Logs em scheduler.log.',
+        }, ensure_ascii=False, indent=2)
+
+    if acao == 'stop':
+        pid = _scheduler_pid()
+
+        if not pid:
+            status = _scheduler_status()
+            if not status['ativo']:
+                return json.dumps({
+                    'acao':     'stop',
+                    'status':   'nao_estava_rodando',
+                    'mensagem': 'Scheduler nao estava ativo.',
+                }, ensure_ascii=False, indent=2)
+            return json.dumps({
+                'acao':     'stop',
+                'status':   'erro',
+                'mensagem': 'Scheduler parece ativo mas nao ha PID file (foi iniciado fora do MCP). Encerre manualmente.',
+            }, ensure_ascii=False, indent=2)
+
+        if not _process_alive(pid):
+            os.remove(_PID_FILE)
+            return json.dumps({
+                'acao':     'stop',
+                'status':   'ja_parado',
+                'mensagem': f'Processo {pid} ja havia encerrado. PID file removido.',
+            }, ensure_ascii=False, indent=2)
+
+        try:
+            if sys.platform == 'win32':
+                import subprocess as _sp
+                _sp.run(['taskkill', '/F', '/PID', str(pid)], capture_output=True)
+            else:
+                import signal
+                os.kill(pid, signal.SIGTERM)
+        except Exception as e:
+            return json.dumps({
+                'acao':     'stop',
+                'status':   'erro',
+                'pid':      pid,
+                'mensagem': str(e),
+            }, ensure_ascii=False, indent=2)
+
+        if os.path.exists(_PID_FILE):
+            os.remove(_PID_FILE)
+
+        return json.dumps({
+            'acao':     'stop',
+            'status':   'encerrado',
+            'pid':      pid,
+            'mensagem': f'Scheduler (PID {pid}) encerrado.',
+        }, ensure_ascii=False, indent=2)
+
+    return json.dumps({
+        'status':   'erro',
+        'mensagem': f"Acao '{acao}' invalida. Use: start | stop | status",
+    }, ensure_ascii=False, indent=2)
+
+
 @mcp.tool()
 def status_sistema() -> str:
     """
@@ -853,17 +1043,7 @@ def status_sistema() -> str:
     resultado = {}
 
     # ── Scheduler ─────────────────────────────────────────────────────────────
-    state_path = os.path.join(PROJECT_DIR, 'scheduler_state.json')
-    if os.path.exists(state_path):
-        mtime = os.path.getmtime(state_path)
-        age_s = datetime.now().timestamp() - mtime
-        resultado['scheduler'] = {
-            'estado':          'provavelmente ativo' if age_s < 120 else 'inativo ou pausado',
-            'ultimo_tick_seg': int(age_s),
-            'dica':            'python scheduler.py para iniciar | scheduler_state.json atualizado a cada 30s',
-        }
-    else:
-        resultado['scheduler'] = {'estado': 'nunca iniciado', 'dica': 'python scheduler.py para iniciar'}
+    resultado['scheduler'] = _scheduler_status()
 
     # ── Player web ────────────────────────────────────────────────────────────
     import urllib.request
