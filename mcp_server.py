@@ -1392,6 +1392,134 @@ def _spot_cache_info(spot: dict) -> dict:
 
 
 @mcp.tool()
+def adicionar_spot(
+    id_spot: str,
+    tipo: str,
+    texto: str = '',
+    topico: str = '',
+    path: str = '',
+    peso: int = 1,
+    max_por_dia: int = None,
+    voz: str = '',
+    duracao_seg: int = 20,
+    modelo: str = '',
+) -> str:
+    """
+    Adiciona um novo spot ao config.yaml.
+
+    ATENCAO: salvar o config reformata o YAML e perde os comentarios do arquivo.
+
+    Args:
+        id_spot:     ID unico do spot (ex: "aviso-reuniao", "promo-produto").
+        tipo:        Tipo do spot: "tts" | "llm" | "file"
+                     tts  — texto fixo convertido em voz (cache permanente)
+                     llm  — topico gerado diariamente pelo LLM (cache diario)
+                     file — arquivo MP3 externo pre-gravado
+        texto:       Texto a narrar. Obrigatorio para tipo "tts".
+        topico:      Tema para o LLM criar o script. Obrigatorio para tipo "llm".
+        path:        Caminho do arquivo MP3. Obrigatorio para tipo "file".
+        peso:        Frequencia relativa de rotacao (padrao: 1).
+        max_por_dia: Limite de reproducoes por dia. Omitir = sem limite.
+        voz:         Voz edge-tts a usar (omitir = usa vinheta.voice do config).
+        duracao_seg: Duracao alvo em segundos para spots llm (padrao: 20).
+        modelo:      Modelo LLM para spots llm (omitir = usa llm.model do config).
+
+    Exemplos:
+        adicionar_spot("aviso-reuniao", "tts", texto="Reuniao geral as 15h.")
+        adicionar_spot("promo-produto", "llm", topico="Promova o produto X em 20s", duracao_seg=20)
+        adicionar_spot("jingle", "file", path="spots/jingle.mp3", peso=2)
+    """
+    if not id_spot or not tipo:
+        return json.dumps({'status': 'erro', 'mensagem': 'id_spot e tipo sao obrigatorios.'}, ensure_ascii=False)
+
+    tipo = tipo.lower()
+    if tipo not in ('tts', 'llm', 'file'):
+        return json.dumps({'status': 'erro', 'mensagem': 'tipo deve ser: tts | llm | file'}, ensure_ascii=False)
+
+    if tipo == 'tts' and not texto:
+        return json.dumps({'status': 'erro', 'mensagem': 'Para tipo "tts", o campo texto e obrigatorio.'}, ensure_ascii=False)
+    if tipo == 'llm' and not topico:
+        return json.dumps({'status': 'erro', 'mensagem': 'Para tipo "llm", o campo topico e obrigatorio.'}, ensure_ascii=False)
+    if tipo == 'file' and not path:
+        return json.dumps({'status': 'erro', 'mensagem': 'Para tipo "file", o campo path e obrigatorio.'}, ensure_ascii=False)
+
+    config = _load_config()
+    spots  = config.get('spots') or []
+
+    if any(s['id'] == id_spot for s in spots):
+        return json.dumps({
+            'status':   'erro',
+            'mensagem': f"Spot '{id_spot}' ja existe. Use deletar_cache_spot() + remover_spot() para substituir.",
+        }, ensure_ascii=False, indent=2)
+
+    spot: dict = {'id': id_spot, 'type': tipo}
+
+    if tipo == 'tts':
+        spot['text'] = texto
+        if voz:
+            spot['voice'] = voz
+    elif tipo == 'llm':
+        spot['topic'] = topico
+        spot['duration_seconds'] = duracao_seg
+        if modelo:
+            spot['model'] = modelo
+        if voz:
+            spot['voice'] = voz
+    elif tipo == 'file':
+        spot['path'] = path
+
+    if peso != 1:
+        spot['weight'] = peso
+    if max_por_dia is not None:
+        spot['max_per_day'] = max_por_dia
+
+    spots.append(spot)
+    config['spots'] = spots
+    _save_config(config)
+
+    return json.dumps({
+        'status':  'ok',
+        'spot':    spot,
+        'total_spots': len(spots),
+        'proximo_passo': 'Use gerar_spot("' + id_spot + '") para pre-gerar o audio.' if tipo in ('tts', 'llm') else '',
+        'aviso':   'config.yaml foi reformatado — comentarios originais foram perdidos.',
+    }, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def remover_spot(id_spot: str) -> str:
+    """
+    Remove um spot do config.yaml.
+    O cache de audio NAO e removido automaticamente — use deletar_cache_spot() se necessario.
+
+    Args:
+        id_spot: ID do spot a remover.
+    """
+    config = _load_config()
+    spots  = config.get('spots') or []
+
+    removido = next((s for s in spots if s['id'] == id_spot), None)
+    if not removido:
+        ids = [s['id'] for s in spots]
+        return json.dumps({
+            'status':   'erro',
+            'mensagem': f"Spot '{id_spot}' nao encontrado.",
+            'spots_disponiveis': ids,
+        }, ensure_ascii=False, indent=2)
+
+    config['spots'] = [s for s in spots if s['id'] != id_spot]
+    _save_config(config)
+
+    return json.dumps({
+        'status':        'ok',
+        'removido':      removido,
+        'total_restantes': len(config['spots']),
+        'dica':          f'Cache de audio nao removido. Use deletar_cache_spot("{id_spot}") se quiser limpar.',
+        'aviso':         'config.yaml foi reformatado — comentarios originais foram perdidos.',
+    }, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
 def listar_spots() -> str:
     """
     Lista todos os spots configurados com tipo, peso, limite diario e status do cache de audio.
