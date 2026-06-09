@@ -420,7 +420,12 @@ async function pollEpisodes() {
     const knownIds = new Set(allEpisodes.map(e => e.id));
     const newOnes  = fresh.filter(e => !knownIds.has(e.id));
 
-    if (!newOnes.length) return;
+    if (!newOnes.length) {
+      // Sem novos episódios, mas atualiza o próximo agendado
+      // (estado do scheduler pode ter mudado desde o último poll)
+      appendNextScheduled();
+      return;
+    }
 
     allEpisodes = fresh;
     rerenderCurrentDay();
@@ -731,6 +736,8 @@ function renderDays() {
 function appendNextScheduled() {
   const today = new Date().toISOString().slice(0, 10);
   if (currentDate !== today) return;
+  // Remove item anterior para evitar duplicatas ao atualizar estado do scheduler
+  document.querySelectorAll('#playlist .ep-next').forEach(el => el.remove());
   fetch('/api/next-scheduled')
     .then(r => r.json())
     .then(next => {
