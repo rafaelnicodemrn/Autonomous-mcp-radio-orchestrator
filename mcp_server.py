@@ -1260,6 +1260,258 @@ def testar_tts(texto: str, voz: str = '') -> str:
     }, ensure_ascii=False, indent=2)
 
 
+# ── Tools — Diagnóstico e operação avançada ───────────────────────────────────
+
+@mcp.tool()
+def ler_log(linhas: int = 50) -> str:
+    """
+    Retorna as ultimas N linhas do scheduler.log.
+    Util para diagnosticar falhas de geracao de episodios sem precisar abrir o arquivo.
+
+    Args:
+        linhas: Numero de linhas a retornar a partir do final do arquivo. Default: 50.
+                Use linhas=200 para investigacoes mais detalhadas.
+    """
+    log_path = os.path.join(PROJECT_DIR, 'scheduler.log')
+
+    if not os.path.exists(log_path):
+        return json.dumps({
+            'status':   'vazio',
+            'mensagem': 'scheduler.log nao encontrado. O scheduler ainda nao foi iniciado pelo MCP.',
+            'dica':     'Use controlar_scheduler("start") para iniciar.',
+        }, ensure_ascii=False, indent=2)
+
+    size_kb = round(os.path.getsize(log_path) / 1024, 1)
+
+    with open(log_path, 'r', encoding='utf-8', errors='replace') as f:
+        todas = f.readlines()
+
+    recentes = todas[-linhas:]
+
+    return json.dumps({
+        'status':         'ok',
+        'arquivo':        log_path,
+        'tamanho_kb':     size_kb,
+        'total_linhas':   len(todas),
+        'linhas_retornadas': len(recentes),
+        'log':            ''.join(recentes),
+    }, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def listar_zips_wp() -> str:
+    """
+    Lista os arquivos ZIP de exportacao do WhatsApp configurados no projeto.
+    Mostra nome, tamanho, data de modificacao e se o arquivo esta presente.
+    Util para verificar se os exports estao atualizados antes de gerar episodios.
+    """
+    config  = _load_config()
+    sources = [s for s in config.get('sources', []) if s.get('type') == 'whatsapp']
+
+    if not sources:
+        return json.dumps({
+            'status':   'sem_fontes',
+            'mensagem': 'Nenhuma fonte do tipo whatsapp configurada no config.yaml.',
+        }, ensure_ascii=False, indent=2)
+
+    resultado = []
+    for src in sources:
+        path_cfg = src.get('settings', {}).get('path', '')
+        entry: dict = {
+            'id':       src['id'],
+            'nome':     src.get('name', src['id']),
+            'habilitada': src.get('enabled', True),
+            'path_configurado': path_cfg,
+        }
+
+        if not path_cfg:
+            entry['status'] = 'path_nao_configurado'
+            resultado.append(entry)
+            continue
+
+        # path pode ser um .zip direto ou uma pasta com varios .zips
+        if os.path.isfile(path_cfg):
+            mtime = datetime.fromtimestamp(os.path.getmtime(path_cfg)).strftime('%Y-%m-%d %H:%M')
+            size_kb = round(os.path.getsize(path_cfg) / 1024, 1)
+            dias = (datetime.now() - datetime.fromtimestamp(os.path.getmtime(path_cfg))).days
+            entry['status'] = 'ok'
+            entry['arquivos'] = [{
+                'nome':       os.path.basename(path_cfg),
+                'tamanho_kb': size_kb,
+                'modificado': mtime,
+                'dias_atras': dias,
+            }]
+        elif os.path.isdir(path_cfg):
+            zips = sorted(
+                [f for f in os.listdir(path_cfg) if f.lower().endswith('.zip')],
+                key=lambda f: os.path.getmtime(os.path.join(path_cfg, f)),
+                reverse=True,
+            )
+            if not zips:
+                entry['status'] = 'pasta_vazia'
+                entry['arquivos'] = []
+            else:
+                entry['status'] = 'ok'
+                entry['arquivos'] = []
+                for z in zips:
+                    zp = os.path.join(path_cfg, z)
+                    mtime = datetime.fromtimestamp(os.path.getmtime(zp)).strftime('%Y-%m-%d %H:%M')
+                    dias  = (datetime.now() - datetime.fromtimestamp(os.path.getmtime(zp))).days
+                    entry['arquivos'].append({
+                        'nome':       z,
+                        'tamanho_kb': round(os.path.getsize(zp) / 1024, 1),
+                        'modificado': mtime,
+                        'dias_atras': dias,
+                    })
+        else:
+            entry['status'] = 'nao_encontrado'
+            entry['arquivos'] = []
+
+        resultado.append(entry)
+
+    return json.dumps({
+        'status':  'ok',
+        'fontes':  resultado,
+    }, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def status_player() -> str:
+    """
+    Retorna o estado atual do player web (serve.py).
+    Mostra se esta ativo, episodios de hoje, proximo item agendado e estatisticas do dia.
+
+    Nota: o episodio em reproducao e gerenciado pelo browser (localStorage) e nao e
+    acessivel pelo servidor — esta tool mostra a playlist disponivel e o proximo agendado.
+    """
+    import urllib.request
+    import urllib.error
+
+    base = 'http://localhost:5000'
+
+    # Verificar se o player esta ativo
+    try:
+        urllib.request.urlopen(f'{base}/api/episodes', timeout=3)
+        ativo = True
+    except Exception:
+        return json.dumps({
+            'status': 'inativo',
+            'mensagem': 'Player nao esta rodando. Use: python serve.py',
+            'url': base,
+        }, ensure_ascii=False, indent=2)
+
+    resultado: dict = {'status': 'ativo', 'url': base}
+
+    # Episodios de hoje
+    try:
+        with urllib.request.urlopen(f'{base}/api/episodes', timeout=3) as r:
+            episodios_raw = json.loads(r.read().decode())
+        hoje = datetime.now().strftime('%Y-%m-%d')
+        episodios_hoje = [
+            e for e in episodios_raw
+            if isinstance(e, dict) and e.get('date', '') == hoje
+        ]
+        total_dur = sum(e.get('duration', 0) for e in episodios_hoje)
+        resultado['hoje'] = {
+            'total_episodios': len(episodios_hoje),
+            'duracao_total_min': round(total_dur / 60, 1),
+            'episodios': [
+                {
+                    'id':     e.get('id', ''),
+                    'nome':   e.get('source_name', ''),
+                    'hora':   e.get('id', '').split('/')[-1].split('_')[0] if '/' in e.get('id', '') else '',
+                    'dur_min': round(e.get('duration', 0) / 60, 1),
+                }
+                for e in episodios_hoje
+            ],
+        }
+    except Exception as ex:
+        resultado['hoje'] = {'erro': str(ex)}
+
+    # Proximo agendado
+    try:
+        with urllib.request.urlopen(f'{base}/api/next-scheduled', timeout=3) as r:
+            prox = json.loads(r.read().decode())
+        resultado['proximo_agendado'] = prox
+    except Exception:
+        resultado['proximo_agendado'] = None
+
+    resultado['nota'] = (
+        'O episodio em reproducao e controlado pelo browser (localStorage) '
+        'e nao e visivel pelo servidor.'
+    )
+
+    return json.dumps(resultado, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def deletar_episodio(pasta: str, data: str = '') -> str:
+    """
+    Remove a pasta de um episodio especifico do output/.
+    Use ler_episodio() primeiro para confirmar o conteudo antes de deletar.
+
+    Args:
+        pasta: Nome ou prefixo parcial da pasta do episodio. Exemplos:
+               "09-30_youtube"  — episodio exato
+               "09-30"          — qualquer episodio das 09:30
+               "youtube"        — todos os episodios de youtube do dia
+        data:  Data no formato YYYY-MM-DD. Se vazio, usa hoje.
+
+    Retorna a lista de pastas removidas e o espaco liberado.
+    """
+    if not data:
+        data = datetime.now().strftime('%Y-%m-%d')
+
+    day_dir = os.path.join(PROJECT_DIR, 'output', data)
+    if not os.path.isdir(day_dir):
+        return json.dumps({
+            'status':   'erro',
+            'mensagem': f"Nenhum episodio encontrado para {data}.",
+        }, ensure_ascii=False, indent=2)
+
+    candidatos = [
+        f for f in sorted(os.listdir(day_dir))
+        if pasta.lower() in f.lower() and os.path.isdir(os.path.join(day_dir, f))
+    ]
+
+    if not candidatos:
+        return json.dumps({
+            'status':   'erro',
+            'mensagem': f"Nenhuma pasta com '{pasta}' em {data}.",
+            'pastas_disponiveis': [
+                f for f in sorted(os.listdir(day_dir))
+                if os.path.isdir(os.path.join(day_dir, f))
+            ],
+        }, ensure_ascii=False, indent=2)
+
+    removidas = []
+    erros     = []
+    bytes_total = 0
+
+    for folder in candidatos:
+        ep_path = os.path.join(day_dir, folder)
+        try:
+            sz = sum(
+                os.path.getsize(os.path.join(root, f))
+                for root, _, files in os.walk(ep_path)
+                for f in files
+            )
+            shutil.rmtree(ep_path)
+            removidas.append({'pasta': folder, 'tamanho_kb': round(sz / 1024, 1)})
+            bytes_total += sz
+        except Exception as e:
+            erros.append({'pasta': folder, 'erro': str(e)})
+
+    return json.dumps({
+        'status':            'ok' if removidas else 'erro',
+        'data':              data,
+        'removidas':         removidas,
+        'total_removidas':   len(removidas),
+        'espaco_liberado_kb': round(bytes_total / 1024, 1),
+        'erros':             erros,
+    }, ensure_ascii=False, indent=2)
+
+
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 if __name__ == '__main__':
