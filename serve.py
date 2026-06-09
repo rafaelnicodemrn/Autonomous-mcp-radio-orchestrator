@@ -863,10 +863,21 @@ def _is_date(s: str) -> bool:
 
 
 def _has_audio(ep_path: str) -> bool:
-    """Aceita episódios com episode.mp3 ou episódios de replay com audio_path em episode.json."""
-    if os.path.exists(os.path.join(ep_path, 'episode.mp3')):
-        return True
+    """Aceita apenas episódios completamente gerados, evitando race condition com o player."""
+    mp3_path  = os.path.join(ep_path, 'episode.mp3')
     meta_path = os.path.join(ep_path, 'episode.json')
+
+    if os.path.exists(mp3_path):
+        # episode.json é gravado APÓS o mp3 — só exibe quando ambos estão prontos
+        if not os.path.exists(meta_path):
+            return False
+        try:
+            with open(meta_path, 'r', encoding='utf-8') as f:
+                return json.load(f).get('duration_seconds', 0) > 0
+        except Exception:
+            return False
+
+    # Replay: episode.json com audio_path apontando para o mp3 original
     if os.path.exists(meta_path):
         try:
             with open(meta_path, 'r', encoding='utf-8') as f:
