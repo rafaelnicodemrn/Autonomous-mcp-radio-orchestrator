@@ -322,6 +322,55 @@ def run_loop():
         time.sleep(30)
 
 
+# ── PID guard ────────────────────────────────────────────────────────────────
+
+PID_FILE = 'scheduler.pid'
+
+
+def _process_alive(pid: int) -> bool:
+    try:
+        if sys.platform == 'win32':
+            import subprocess as _sp
+            r = _sp.run(['tasklist', '/FI', f'PID eq {pid}', '/NH'],
+                        capture_output=True, text=True)
+            return str(pid) in r.stdout
+        else:
+            os.kill(pid, 0)
+            return True
+    except (ProcessLookupError, PermissionError, OSError):
+        return False
+
+
+def _acquire_pid_lock() -> bool:
+    """Verifica se ja ha instancia rodando. Retorna True se pode prosseguir."""
+    if os.path.exists(PID_FILE):
+        try:
+            with open(PID_FILE, 'r') as f:
+                existing_pid = int(f.read().strip())
+            if _process_alive(existing_pid):
+                print(f"ERRO: Scheduler ja esta rodando (PID {existing_pid}).")
+                print(f"      Encerre a instancia existente antes de iniciar outra.")
+                print(f"      Para forcar, remova o arquivo: {os.path.abspath(PID_FILE)}")
+                return False
+        except (ValueError, OSError):
+            pass  # arquivo corrompido — sobrescreve
+
+    with open(PID_FILE, 'w') as f:
+        f.write(str(os.getpid()))
+    return True
+
+
+def _release_pid_lock():
+    if os.path.exists(PID_FILE):
+        try:
+            with open(PID_FILE, 'r') as f:
+                pid = int(f.read().strip())
+            if pid == os.getpid():
+                os.remove(PID_FILE)
+        except (ValueError, OSError):
+            pass
+
+
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 if __name__ == '__main__':
@@ -336,4 +385,9 @@ if __name__ == '__main__':
         print(f"Grade {radio_name} ({date.today()}):")
         print_schedule(entries)
     else:
-        run_loop()
+        if not _acquire_pid_lock():
+            sys.exit(1)
+        try:
+            run_loop()
+        finally:
+            _release_pid_lock()
