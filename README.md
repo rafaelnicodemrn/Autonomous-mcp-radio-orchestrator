@@ -904,12 +904,16 @@ python mcp_server.py
 | `gerar_episodios(["noticias", "copa"])` | Gera episódios para as fontes especificadas |
 | `gerar_episodios(["musica:3"])` | Gera bloco musical com N faixas |
 | `gerar_episodios(["url:https://..."])` | Gera episódio a partir de uma URL avulsa |
+| `gerar_episodios(["clipping:tema"])` | Gera clipping sobre um tema (alternativa compacta) |
+| `gerar_clipping("reforma tributária 2026")` | Gera clipping de mídia sobre um tema — como diferentes veículos estão cobrindo o assunto |
+| `gerar_clipping("copa", followup=True)` | Clipping de acompanhamento — busca só artigos recentes sobre tema já coberto |
 | `listar_episodios("2026-06-11")` | Lista episódios de uma data (padrão: hoje) com duração total |
 | `ler_episodio("noticias")` | Lê o roteiro completo e metadados de um episódio por prefixo |
+| `deletar_episodio("09-30_youtube")` | Remove a pasta de um episódio específico do output |
 | `replay_episodio("12-15_not")` | Replay de episódio por prefixo parcial da pasta |
 | `replay_episodio("12-15", "2026-06-03")` | Replay de episódio de uma data específica |
 
-**Fontes disponíveis:**
+**Fontes disponíveis em `gerar_episodios`:**
 `youtube` · `noticias` · `noticias-locais` · `tecnologia` · `horoscopo` · `utilidades` · `loteria` · `copa` · `brasileirao` · `champions` · `efemerides` · `quiz` · `reddit` · `receitas` · `filmes` · `filmes-cartaz` · `musica` · `musica-local` · `concursos` · `biblia`
 
 #### Histórico
@@ -932,11 +936,24 @@ python mcp_server.py
 
 > **Atenção:** ferramentas que salvam o `config.yaml` reformatam o arquivo YAML e perdem os comentários originais. O conteúdo e os valores são preservados.
 
+#### Scheduler
+
+| Ferramenta | Descrição |
+|-----------|-----------|
+| `controlar_scheduler("status")` | Verifica se o scheduler está rodando (via PID real, não heurística) |
+| `controlar_scheduler("start")` | Inicia o scheduler em background — logs em `scheduler.log`, PID em `scheduler.pid` |
+| `controlar_scheduler("stop")` | Encerra o scheduler pelo PID salvo |
+| `ler_log(linhas=50)` | Retorna as últimas N linhas do `scheduler.log` para diagnóstico de falhas |
+
+O scheduler protege contra instâncias duplicadas: tentar iniciar uma segunda instância (pelo MCP ou pelo terminal) resulta em erro com o PID da instância já ativa.
+
 #### Sistema e manutenção
 
 | Ferramenta | Descrição |
 |-----------|-----------|
-| `status_sistema()` | Status do scheduler, player web, API keys configuradas e uso de disco |
+| `status_sistema()` | Status completo: scheduler, player, API keys configuradas e uso de disco |
+| `status_player()` | Estado do player: ativo/inativo, playlist de hoje e próximo episódio agendado |
+| `listar_zips_wp()` | Lista arquivos ZIP de exportação do WhatsApp por fonte configurada (nome, tamanho, data) |
 | `limpar_output(dias_manter=7)` | Lista ou remove episódios antigos para liberar espaço (padrão: preview seguro) |
 | `testar_tts("Bem-vindos!")` | Gera `output/tts_test.mp3` para testar o TTS sem gerar episódio |
 
@@ -955,9 +972,13 @@ python mcp_server.py
 
 Após configurar, você pode pedir ao Claude:
 - *"Gera um episódio de notícias e copa do mundo"*
+- *"Faz um clipping sobre a reforma tributária"*
+- *"Inicia o scheduler"* / *"Para o scheduler"*
+- *"Mostra as últimas 100 linhas do log do scheduler"*
 - *"Habilita a fonte de música e adiciona um bloco musical às 12h"*
 - *"Qual o status do sistema? O scheduler está rodando?"*
 - *"Mostra o roteiro do episódio de YouTube das 9h"*
+- *"Remove o episódio de clipping das 14h30"*
 - *"Remove episódios mais antigos que 14 dias"*
 
 ---
