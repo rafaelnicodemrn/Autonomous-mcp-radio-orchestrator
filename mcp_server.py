@@ -19,6 +19,9 @@ sys.path.insert(0, PROJECT_DIR)
 from dotenv import load_dotenv
 load_dotenv(os.path.join(PROJECT_DIR, '.env'))
 
+import nest_asyncio
+nest_asyncio.apply()  # permite asyncio.run() aninhado dentro do loop do MCP
+
 import yaml
 from mcp.server.fastmcp import FastMCP
 
