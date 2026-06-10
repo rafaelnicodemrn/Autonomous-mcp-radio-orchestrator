@@ -1,4 +1,6 @@
+import io
 import os
+import re
 import sys
 import json
 import webbrowser
@@ -132,7 +134,8 @@ audio { width: 100%; height: 36px; accent-color: #6366f1; }
 .day-num   { font-size: 22px; font-weight: 700; line-height: 1; }
 .day-month { font-size: 11px; color: #9ca3af; margin-top: 2px; }
 
-.playlist { width: 240px; border-right: 1px solid #374151; overflow-y: auto; flex-shrink: 0; }
+.playlist { width: 240px; border-right: 1px solid #374151; overflow: hidden; flex-shrink: 0; display: flex; flex-direction: column; }
+#playlist  { flex: 1; overflow-y: auto; }
 .section-header { font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: .05em;
                   padding: 14px 16px 8px; position: sticky; top: 0; background: #111827; }
 .ep-item { padding: 12px 16px; cursor: pointer; display: flex; align-items: center;
@@ -209,9 +212,9 @@ audio { width: 100%; height: 36px; accent-color: #6366f1; }
 
   .playlist {
     width: 100%; border-right: none; display: none;
-    flex: 1; overflow-y: auto;
+    flex: 1; overflow: hidden; flex-direction: column;
   }
-  .playlist.tab-active { display: block; }
+  .playlist.tab-active { display: flex; }
   .ep-item { padding: 14px 16px; }
 
   .notes { display: none; flex: 1; padding: 16px; overflow-y: auto; }
@@ -236,9 +239,40 @@ audio { width: 100%; height: 36px; accent-color: #6366f1; }
 
 @media (min-width: 769px) {
   .sidebar { display: block !important; }
-  .playlist { display: block !important; }
+  .playlist { display: flex !important; }
   .notes { display: block !important; }
 }
+
+/* ── Downloads ──────────────────────────────────────────────────────────────── */
+.ep-check {
+  flex-shrink: 0; accent-color: #6366f1;
+  width: 15px; height: 15px; cursor: pointer; margin-right: 2px;
+}
+.ep-actions { display: flex; gap: 4px; flex-shrink: 0; margin-left: 4px; }
+.ep-action-btn {
+  background: transparent; border: 1px solid #374151; color: #6b7280;
+  width: 26px; height: 26px; border-radius: 5px; font-size: 12px;
+  cursor: pointer; padding: 0; display: flex; align-items: center;
+  justify-content: center; transition: background .15s, color .15s; flex-shrink: 0;
+}
+.ep-action-btn:hover { background: #374151; color: #e5e7eb; }
+
+.dl-toolbar {
+  flex-shrink: 0; background: #1a2235; border-top: 1px solid #374151;
+  padding: 8px 12px; display: none; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.dl-sel-label {
+  display: flex; align-items: center; gap: 6px; font-size: 12px;
+  color: #9ca3af; cursor: pointer; user-select: none; white-space: nowrap; flex: 1;
+}
+.dl-sel-label input { accent-color: #6366f1; cursor: pointer; }
+.dl-day-btn {
+  background: #374151; border: 1px solid #4b5563; color: #d1d5db;
+  padding: 4px 10px; border-radius: 5px; font-size: 12px; cursor: pointer;
+  transition: background .15s; white-space: nowrap;
+}
+.dl-day-btn:hover:not(:disabled) { background: #4b5563; }
+.dl-day-btn:disabled { opacity: .4; cursor: default; }
 </style>
 </head>
 <body>
@@ -276,6 +310,16 @@ audio { width: 100%; height: 36px; accent-color: #6366f1; }
   <div class="playlist">
     <div class="section-header">Playlist</div>
     <div id="playlist"></div>
+    {% if dl_concatenated or dl_zip %}
+    <div class="dl-toolbar" id="dl-toolbar">
+      <label class="dl-sel-label">
+        <input type="checkbox" id="sel-all" onchange="onSelectAllChange(this)">
+        <span id="dl-sel-count">0 sel.</span>
+      </label>
+      {% if dl_concatenated %}<button class="dl-day-btn" id="dl-concat-btn" onclick="downloadDayConcat()" disabled title="MP3 único com os episódios selecionados">⬇ MP3</button>{% endif %}
+      {% if dl_zip %}<button class="dl-day-btn" id="dl-zip-btn" onclick="downloadDayZip()" disabled title="ZIP com os episódios selecionados na estrutura original">⬇ ZIP</button>{% endif %}
+    </div>
+    {% endif %}
   </div>
   <div class="notes">
     <div class="notes-header">Fontes do episódio</div>
@@ -302,12 +346,16 @@ let currentDate   = null;
 const ANNOUNCEMENT_EVERY         = 3;   // break de grade a cada N músicas no modo fallback
 const SPOT_EVERY                 = {{ spots_fallback_every }};   // spot a cada N músicas (0 = desativado)
 const BETWEEN_EPISODES_EVERY     = {{ between_episodes_every }}; // break entre episódios a cada N transições (0 = desativado)
+const DL_INDIVIDUAL   = {{ 'true' if dl_individual   else 'false' }};
+const DL_CONCATENATED = {{ 'true' if dl_concatenated else 'false' }};
+const DL_ZIP          = {{ 'true' if dl_zip          else 'false' }};
 let currentEp     = null;
 let fallbackMode  = false;
 let fallbackIdx   = 0;
 let _fallbackTrackCount      = 0;
 let _episodeTransitionCount  = 0;
 let _playingAnnouncement     = false;   // suprime ended global durante qualquer break
+let selectedEpIds = new Set();
 
 const S_EP   = 'radioIA_ep';
 const S_TIME = 'radioIA_time';
@@ -447,9 +495,11 @@ function rerenderCurrentDay() {
   renderDays();
   if (currentDate) {
     const eps = groupByDate(allEpisodes)[currentDate] || [];
+    eps.forEach(e => selectedEpIds.add(e.id));  // auto-seleciona novos episódios
     const {day, month} = fmt(currentDate);
     document.getElementById('header-sub').textContent = `${day} de ${month} · ${eps.length} episódio(s)`;
     renderPlaylist(eps);
+    renderDownloadToolbar(eps);
     appendNextScheduled();
   }
 }
@@ -770,30 +820,49 @@ function selectDate(date, autoplay = true) {
   document.querySelectorAll('.day-item').forEach(el =>
     el.classList.toggle('active', el.dataset.date === date));
   const eps = groupByDate(allEpisodes)[date] || [];
+  selectedEpIds = new Set(eps.map(e => e.id));
   const {day, month} = fmt(date);
   document.getElementById('header-sub').textContent =
     `${day} de ${month} · ${eps.length} episódio(s)`;
   renderPlaylist(eps);
+  renderDownloadToolbar(eps);
   appendNextScheduled();
   if (autoplay && eps.length) playEpisode(eps[0]);
   if (isMobile()) setTab('playlist');
 }
 
 function renderPlaylist(eps) {
+  const showCheck = DL_CONCATENATED || DL_ZIP;
   document.getElementById('playlist').innerHTML = eps.map(ep => {
     const name = ep.source_name || ep.source_id;
     const dur  = fmtDur(ep.duration);
     const cnt  = ep.videos_covered ? ep.videos_covered + ' itens' : '';
     const meta = [ep.time, dur, cnt].filter(Boolean).join(' · ');
-    return `<div class="ep-item" data-id="${ep.id}" onclick="onEpClick('${ep.id}')">
+    const eid  = ep.id.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    const enam = name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    const checkHtml = showCheck
+      ? `<input type="checkbox" class="ep-check" data-id="${ep.id}"
+           onclick="event.stopPropagation();toggleEpSelect('${eid}')"
+           ${selectedEpIds.has(ep.id) ? 'checked' : ''} />`
+      : '';
+    const dlHtml = DL_INDIVIDUAL
+      ? `<div class="ep-actions">
+           <button class="ep-action-btn" title="Baixar"
+             onclick="event.stopPropagation();downloadEp('${eid}')">⬇</button>
+           <button class="ep-action-btn" title="Compartilhar"
+             onclick="event.stopPropagation();shareEp('${eid}','${enam}')">↗</button>
+         </div>`
+      : '';
+    return `<div class="ep-item" data-id="${ep.id}" onclick="onEpClick('${eid}')">
+      ${checkHtml}
       <div class="ep-dot"></div>
-      <div style="min-width:0">
+      <div style="min-width:0;flex:1">
         <div class="ep-label">${name}</div>
         <div class="ep-meta">${meta}</div>
       </div>
+      ${dlHtml}
     </div>`;
   }).join('');
-  // re-apply active / played
   if (currentEp) {
     const el = document.querySelector(`.ep-item[data-id="${currentEp.id}"]`);
     if (el) el.classList.add('active');
@@ -864,6 +933,120 @@ function renderNotes(ep) {
       ${urlHtml}${commentsHtml}
     </div>`;
   }).join('');
+}
+
+// ── Downloads ─────────────────────────────────────────────────────────────────
+function toggleEpSelect(epId) {
+  if (selectedEpIds.has(epId)) selectedEpIds.delete(epId);
+  else selectedEpIds.add(epId);
+  updateDownloadToolbar();
+}
+
+function onSelectAllChange(cb) {
+  const eps = groupByDate(allEpisodes)[currentDate] || [];
+  if (cb.checked) eps.forEach(e => selectedEpIds.add(e.id));
+  else selectedEpIds.clear();
+  document.querySelectorAll('.ep-check').forEach(el => {
+    el.checked = selectedEpIds.has(el.dataset.id);
+  });
+  updateDownloadToolbar();
+}
+
+function renderDownloadToolbar(eps) {
+  const tb = document.getElementById('dl-toolbar');
+  if (!tb) return;
+  tb.style.display = eps.length ? 'flex' : 'none';
+  updateDownloadToolbar();
+}
+
+function updateDownloadToolbar() {
+  const n   = selectedEpIds.size;
+  const eps = groupByDate(allEpisodes)[currentDate] || [];
+  const lbl = document.getElementById('dl-sel-count');
+  if (lbl) lbl.textContent = n + ' sel.';
+  const cb = document.getElementById('sel-all');
+  if (cb) {
+    cb.checked = n > 0 && n >= eps.length;
+    cb.indeterminate = n > 0 && n < eps.length;
+  }
+  document.querySelectorAll('.dl-day-btn').forEach(b => { b.disabled = n === 0; });
+}
+
+function downloadEp(epId) {
+  const a = document.createElement('a');
+  a.href = '/download/episode/' + epId;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+function shareEp(epId, name) {
+  const url = location.origin + '/audio/' + epId;
+  if (navigator.share) {
+    navigator.share({ title: name, url }).catch(() => {});
+  } else {
+    navigator.clipboard.writeText(url)
+      .then(() => showToast('Link copiado!', false))
+      .catch(() => { try { prompt('Copie o link:', url); } catch(_) {} });
+  }
+}
+
+async function downloadDayConcat() {
+  const ids = [...selectedEpIds];
+  if (!ids.length) return;
+  const btn  = document.getElementById('dl-concat-btn');
+  const orig = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+  showToast('Gerando MP3, aguarde...', false);
+  try {
+    const res = await fetch('/download/day/' + currentDate + '/concat', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({episode_ids: ids}),
+    });
+    if (!res.ok) { showToast('Erro ao gerar MP3', false); return; }
+    const blob = await res.blob();
+    const cd   = res.headers.get('Content-Disposition') || '';
+    const m    = cd.match(/filename="([^"]+)"/);
+    const a    = document.createElement('a');
+    a.href     = URL.createObjectURL(blob);
+    a.download = m ? m[1] : currentDate + '.mp3';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+  } catch (_) {
+    showToast('Erro ao gerar MP3', false);
+  } finally {
+    if (btn) { btn.disabled = selectedEpIds.size === 0; btn.textContent = orig; }
+  }
+}
+
+async function downloadDayZip() {
+  const ids = [...selectedEpIds];
+  if (!ids.length) return;
+  const btn  = document.getElementById('dl-zip-btn');
+  const orig = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+  showToast('Gerando ZIP, aguarde...', false);
+  try {
+    const res = await fetch('/download/day/' + currentDate + '/zip', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({episode_ids: ids}),
+    });
+    if (!res.ok) { showToast('Erro ao gerar ZIP', false); return; }
+    const blob = await res.blob();
+    const cd   = res.headers.get('Content-Disposition') || '';
+    const m    = cd.match(/filename="([^"]+)"/);
+    const a    = document.createElement('a');
+    a.href     = URL.createObjectURL(blob);
+    a.download = m ? m[1] : currentDate + '.zip';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+  } catch (_) {
+    showToast('Erro ao gerar ZIP', false);
+  } finally {
+    if (btn) { btn.disabled = selectedEpIds.size === 0; btn.textContent = orig; }
+  }
 }
 
 init();
@@ -1172,14 +1355,55 @@ def _get_spots_config() -> dict:
     except Exception:
         return {'fallback_every': 0, 'between_episodes_every': 0}
 
+def _get_downloads_config() -> dict:
+    try:
+        import yaml
+        with open('config.yaml', 'r', encoding='utf-8') as f:
+            cfg = yaml.safe_load(f)
+        dl = cfg.get('downloads', {})
+        if not dl.get('enabled', True):
+            return {'individual': False, 'concatenated': False, 'zip': False}
+        return {
+            'individual':   dl.get('individual',   True),
+            'concatenated': dl.get('concatenated', True),
+            'zip':          dl.get('zip',          True),
+        }
+    except Exception:
+        return {'individual': False, 'concatenated': False, 'zip': False}
+
+
+def _safe_filename(s: str) -> str:
+    return re.sub(r'[^\w\-.]', '_', s.replace(' ', '_')).strip('_')
+
+
+def _resolve_audio_path(episode_id: str) -> str | None:
+    """Retorna o caminho real do MP3 de um episódio (inclui replays via audio_path)."""
+    ep_path = os.path.join(OUTPUT_DIR, episode_id)
+    meta_path = os.path.join(ep_path, 'episode.json')
+    if os.path.exists(meta_path):
+        try:
+            with open(meta_path, 'r', encoding='utf-8') as f:
+                audio_path = json.load(f).get('audio_path')
+            if audio_path and os.path.exists(audio_path):
+                return audio_path
+        except Exception:
+            pass
+    mp3 = os.path.join(ep_path, 'episode.mp3')
+    return mp3 if os.path.exists(mp3) else None
+
+
 @app.route('/')
 def index():
     sc = _get_spots_config()
+    dl = _get_downloads_config()
     return render_template_string(
         HTML,
         radio_name=_get_radio_name(),
         spots_fallback_every=sc['fallback_every'],
         between_episodes_every=sc['between_episodes_every'],
+        dl_individual=dl['individual'],
+        dl_concatenated=dl['concatenated'],
+        dl_zip=dl['zip'],
     )
 
 @app.route('/api/episodes')
@@ -1356,6 +1580,108 @@ def api_fallback_intro():
     if os.path.exists(FALLBACK_INTRO_PATH):
         return send_from_directory('output', '_fallback_intro.mp3', mimetype='audio/mpeg')
     return '', 404
+
+
+@app.route('/download/episode/<path:episode_id>')
+def download_episode(episode_id):
+    audio_path = _resolve_audio_path(episode_id)
+    if not audio_path:
+        return '', 404
+
+    ep_path   = os.path.join(OUTPUT_DIR, episode_id)
+    meta_path = os.path.join(ep_path, 'episode.json')
+    source_name = ''
+    if os.path.exists(meta_path):
+        try:
+            with open(meta_path, 'r', encoding='utf-8') as f:
+                source_name = json.load(f).get('source_name', '')
+        except Exception:
+            pass
+
+    date_part   = episode_id.split('/')[0] if '/' in episode_id else ''
+    folder_part = episode_id.split('/')[-1] if '/' in episode_id else episode_id
+    time_part   = folder_part.split('_')[0] if '_' in folder_part else folder_part
+    name_part   = source_name or (folder_part.split('_', 1)[1] if '_' in folder_part else folder_part)
+    filename    = _safe_filename(f"{date_part}_{time_part}_{name_part}") + '.mp3'
+
+    return send_from_directory(
+        os.path.dirname(audio_path),
+        os.path.basename(audio_path),
+        as_attachment=True,
+        download_name=filename,
+        mimetype='audio/mpeg',
+    )
+
+
+@app.route('/download/day/<date>/concat', methods=['POST'])
+def download_day_concat(date):
+    from flask import request as _req, Response as _Resp
+    ids = (_req.get_json() or {}).get('episode_ids', [])
+    if not ids:
+        return jsonify({'error': 'Nenhum episódio selecionado'}), 400
+
+    paths = [p for p in (_resolve_audio_path(eid) for eid in ids) if p]
+    if not paths:
+        return jsonify({'error': 'Arquivos não encontrados'}), 404
+
+    try:
+        from pydub import AudioSegment
+        combined = AudioSegment.empty()
+        for p in paths:
+            combined += AudioSegment.from_mp3(p)
+        buf = io.BytesIO()
+        combined.export(buf, format='mp3', bitrate='128k')
+        audio_bytes = buf.getvalue()
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+    filename = _safe_filename(f"{_get_radio_name()}_{date}") + '.mp3'
+    return _Resp(audio_bytes, mimetype='audio/mpeg', headers={
+        'Content-Disposition': f'attachment; filename="{filename}"',
+        'Cache-Control':       'no-cache',
+    })
+
+
+@app.route('/download/day/<date>/zip', methods=['POST'])
+def download_day_zip(date):
+    import zipfile as _zf
+    from flask import request as _req, Response as _Resp
+    ids = (_req.get_json() or {}).get('episode_ids', [])
+    if not ids:
+        return jsonify({'error': 'Nenhum episódio selecionado'}), 400
+
+    buf   = io.BytesIO()
+    added = 0
+    with _zf.ZipFile(buf, 'w', _zf.ZIP_DEFLATED) as zf:
+        for eid in ids:
+            audio_path = _resolve_audio_path(eid)
+            if not audio_path:
+                continue
+            ep_path   = os.path.join(OUTPUT_DIR, eid)
+            meta_path = os.path.join(ep_path, 'episode.json')
+            source_name = ''
+            if os.path.exists(meta_path):
+                try:
+                    with open(meta_path, 'r', encoding='utf-8') as f:
+                        source_name = json.load(f).get('source_name', '')
+                except Exception:
+                    pass
+            folder    = eid.split('/')[-1] if '/' in eid else eid
+            time_part = folder.split('_')[0] if '_' in folder else folder
+            name_part = source_name or (folder.split('_', 1)[1] if '_' in folder else folder)
+            arc_name  = f"{date}/{_safe_filename(time_part + '_' + name_part)}.mp3"
+            with open(audio_path, 'rb') as f:
+                zf.writestr(arc_name, f.read())
+            added += 1
+
+    if not added:
+        return jsonify({'error': 'Arquivos não encontrados'}), 404
+
+    filename = _safe_filename(f"{_get_radio_name()}_{date}") + '.zip'
+    return _Resp(buf.getvalue(), mimetype='application/zip', headers={
+        'Content-Disposition': f'attachment; filename="{filename}"',
+        'Cache-Control':       'no-cache',
+    })
 
 
 def open_browser():

@@ -507,6 +507,15 @@ radio:
   background_music: ""
   background_volume_db: -22
 
+# ── Downloads ─────────────────────────────────────────────────────────────────
+# Controla quais opções de download ficam disponíveis no player web.
+# Cada funcionalidade pode ser ativada/desativada individualmente.
+downloads:
+  enabled: true         # false = desativa todos os downloads de uma vez
+  individual: true      # botão de download/compartilhar por episódio
+  concatenated: true    # baixar todos os episódios do dia como MP3 único
+  zip: true             # baixar todos os episódios do dia como ZIP (estrutura original)
+
 # ── Agendamento ───────────────────────────────────────────────────────────────
 # Modos:
 #   Diário  — omita 'date': roda todo dia no horário indicado

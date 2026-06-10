@@ -750,6 +750,46 @@ ipconfig    # Windows — anote o "Endereço IPv4"
 
 ---
 
+## Downloads e compartilhamento
+
+O player web oferece opções de download diretamente na playlist. Cada funcionalidade pode ser ativada ou desativada individualmente no `config.yaml`:
+
+```yaml
+downloads:
+  enabled: true         # false = desativa todos de uma vez
+  individual: true      # botão de download e compartilhamento por episódio
+  concatenated: true    # baixar todos os episódios do dia como MP3 único
+  zip: true             # baixar todos os episódios do dia como ZIP
+```
+
+### Funcionalidades
+
+| Botão | Onde aparece | O que faz |
+|-------|-------------|-----------|
+| ⬇ (por episódio) | Ao lado de cada item da playlist | Baixa o MP3 individual com nome `{data}_{hora}_{fonte}.mp3` |
+| ↗ (por episódio) | Ao lado de cada item da playlist | **Mobile**: abre o share sheet nativo do sistema (WhatsApp, Telegram, etc.); **Desktop**: copia o link de streaming para a área de transferência |
+| ⬇ MP3 (toolbar) | Rodapé da playlist | Concatena todos os episódios selecionados em um único MP3 e baixa como `{RadioName}_{data}.mp3` |
+| ⬇ ZIP (toolbar) | Rodapé da playlist | Compacta os episódios selecionados mantendo a estrutura original de pastas (`{data}/{hora}_{fonte}.mp3`) |
+
+### Seleção de episódios
+
+A toolbar de download (rodapé da playlist) exibe checkboxes por episódio. **Todos estão selecionados por padrão** ao abrir um dia. Use o checkbox "Selecionar todos" para marcar/desmarcar todos de uma vez.
+
+Novos episódios detectados via polling são adicionados à seleção automaticamente.
+
+### Via MCP
+
+```python
+exportar_episodios("listar")                           # lista os arquivos disponíveis
+exportar_episodios("concat")                           # MP3 único do dia atual
+exportar_episodios("zip", "2026-06-10")                # ZIP de uma data específica
+exportar_episodios("concat", pastas=["09-00_noticias", "10-30_youtube"])  # seleção manual
+```
+
+Os arquivos gerados pelo MCP são salvos em `output/_exports/`.
+
+---
+
 ## Demonstração
 
 ### Interface web
@@ -956,6 +996,15 @@ O scheduler protege contra instâncias duplicadas: tentar iniciar uma segunda in
 | `listar_zips_wp()` | Lista arquivos ZIP de exportação do WhatsApp por fonte configurada (nome, tamanho, data) |
 | `limpar_output(dias_manter=7)` | Lista ou remove episódios antigos para liberar espaço (padrão: preview seguro) |
 | `testar_tts("Bem-vindos!")` | Gera `output/tts_test.mp3` para testar o TTS sem gerar episódio |
+
+#### Exportação
+
+| Ferramenta | Descrição |
+|-----------|-----------|
+| `exportar_episodios("listar")` | Lista os episódios disponíveis no dia sem gerar exportação |
+| `exportar_episodios("concat")` | Gera MP3 único com todos os episódios do dia concatenados — salvo em `output/_exports/` |
+| `exportar_episodios("zip", "2026-06-10")` | Gera ZIP com os episódios de uma data específica na estrutura de pastas |
+| `exportar_episodios("concat", pastas=["09-00_noticias"])` | Exporta apenas os episódios selecionados |
 
 ### Configurar no Claude Code (`~/.claude/claude_desktop_config.json`)
 
