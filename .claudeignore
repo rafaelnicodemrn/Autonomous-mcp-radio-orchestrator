@@ -1,0 +1,17 @@
+﻿.venv/
+output/
+music/
+__pycache__/
+*.pyc
+*.mp3
+*.wav
+*.ogg
+*.json
+*.pickle
+*.pkl
+node_modules/
+.git/
+tests/
+google-tts-credentials.json
+credentials.json
+token.json
