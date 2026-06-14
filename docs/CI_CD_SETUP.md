@@ -5,6 +5,23 @@ Checklist de configuração única para habilitar o pipeline
 produção (SSH) e às configurações do repositório no GitHub — passos manuais,
 não automatizáveis.
 
+## 0. Acesso ao repositório (pré-requisito)
+
+O repositório `fabianoallex/radioIA` está sob a conta `fabianoallex`. A conta
+autenticada via `gh auth login` (`rafaelnicodemrn`) tem apenas permissão
+**READ** — sem acesso para `git push`, configurar branch protection,
+environments ou secrets via `gh api`.
+
+Antes de seguir com as seções 2–4, é necessário um dos seguintes:
+
+- `fabianoallex` adicionar `rafaelnicodemrn` como colaborador com permissão
+  **Admin** (ou pelo menos **Write** para push + configuração manual pela
+  conta `fabianoallex` para branch protection/environment/secrets); ou
+- Transferir/criar o repositório sob a conta `rafaelnicodemrn`.
+
+As seções 2–4 abaixo (Secrets, Environment, Branch protection) precisam ser
+feitas por quem tiver permissão **Admin** no repositório.
+
 ## 1. Servidor de produção (GCP VM, via Cloud Console SSH)
 
 Gerar uma chave SSH dedicada para o GitHub Actions e restringir o `sudo` ao
