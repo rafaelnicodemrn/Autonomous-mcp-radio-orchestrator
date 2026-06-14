@@ -75,7 +75,48 @@ Configurado via `gh api repos/.../branches/main/protection`:
 - Sem exigência de PR review (repo de um único mantenedor)
 - Force push e deleção de `main` bloqueados
 
-## 5. Validação pós-setup
+## 5. Troubleshooting: "Error loading key (stdin): error in libcrypto"
+
+Esse erro no passo "Configurar chave SSH" (`webfactory/ssh-agent`) indica que
+o conteúdo do secret `GCLOUD_SSH_PRIVATE_KEY` está incompleto ou corrompido —
+normalmente porque a chave foi colada manualmente em um terminal Windows
+(que pode converter quebras de linha para CRLF, truncar linhas longas ou
+perder a linha final em branco).
+
+**Correção (sem colar no terminal):** baixe a chave diretamente do servidor
+via SSH e grave o secret a partir de um arquivo/stdin, usando Git Bash (pipes
+em texto puro, sem conversão de encoding como ocorre no pipeline do
+PowerShell):
+
+```bash
+# 1. Copia a chave privada do servidor para um arquivo temporário local
+ssh rafaelnicodemrn@34.24.139.45 "cat ~/.ssh/github_actions_key" > /tmp/ga_key
+
+# 2. Valida o formato sem expor o conteúdo (deve imprimir o fingerprint)
+ssh-keygen -l -f /tmp/ga_key
+
+# 3. Regrava o secret a partir do arquivo (gh lê via stdin, sem paste)
+gh secret set GCLOUD_SSH_PRIVATE_KEY \
+  --repo rafaelnicodemrn/Autonomous-mcp-radio-orchestrator \
+  --env production < /tmp/ga_key
+
+# 4. Remove o arquivo temporário
+rm /tmp/ga_key
+```
+
+Se `ssh-keygen -l -f /tmp/ga_key` falhar (chave corrompida também no
+servidor), gere uma nova chave dedicada e adicione a pública ao
+`authorized_keys` antes do passo 1:
+
+```bash
+ssh rafaelnicodemrn@34.24.139.45 "ssh-keygen -t ed25519 -C github-actions-radioia -f ~/.ssh/github_actions_key -N '' -y >> ~/.ssh/authorized_keys"
+```
+
+Depois, reexecute o workflow `cd.yml` (ex.: `gh workflow run cd.yml --ref main`
+ou um novo push em `main`) e confirme que o passo "Configurar chave SSH"
+passa.
+
+## 6. Validação pós-setup
 
 1. Abrir um PR de `feature/*` para `develop` (ou `main`) e confirmar que o
    workflow `ci.yml` roda e os checks aparecem no PR.
