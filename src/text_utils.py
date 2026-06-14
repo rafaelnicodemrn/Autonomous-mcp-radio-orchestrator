@@ -4,23 +4,23 @@ import re
 
 # ── Moeda ─────────────────────────────────────────────────────────────────────
 
-_CURRENCY_RE = re.compile(r'R\$\s*([\d.]+(?:,\d{2})?)')
+_CURRENCY_RE = re.compile(r"R\$\s*([\d.]+(?:,\d{2})?)")
 
 
 def _currency_to_words(match: re.Match) -> str:
-    raw = match.group(1).replace('.', '').replace(',', '.')
+    raw = match.group(1).replace(".", "").replace(",", ".")
     try:
         int_val = int(float(raw))
     except ValueError:
         return match.group(0)
 
     if int_val == 0:
-        return 'zero reais'
+        return "zero reais"
 
-    millions  = int_val // 1_000_000
+    millions = int_val // 1_000_000
     remainder = int_val % 1_000_000
     thousands = remainder // 1_000
-    rest      = remainder % 1_000
+    rest = remainder % 1_000
 
     parts = []
     if millions:
@@ -30,15 +30,16 @@ def _currency_to_words(match: re.Match) -> str:
     if rest:
         parts.append(str(rest))
 
-    text = ' e '.join(parts)
+    text = " e ".join(parts)
 
     # "de reais" após milhão(ões) quando não há complemento
     if millions and not thousands and not rest:
-        return text + ' de reais'
-    return text + ' reais'
+        return text + " de reais"
+    return text + " reais"
 
 
 # ── API pública ───────────────────────────────────────────────────────────────
+
 
 def normalize_for_tts(text: str) -> str:
     """Converte expressões problemáticas para leitura em TTS.

@@ -1,17 +1,19 @@
 """Provider edge-tts (padrão) — Microsoft Neural TTS via Edge browser, sem custo."""
 
 import asyncio
+
 import edge_tts
 
-MAX_CHARS = 450   # limite conservador para evitar timeout no edge-tts
+MAX_CHARS = 450  # limite conservador para evitar timeout no edge-tts
 
 
 class EdgeTTSProvider:
     def __init__(self, config: dict):
         self._config = config or {}
 
-    async def synthesize(self, text: str, voice: str, output_path: str,
-                         rate: str = '+0%', retries: int = 4) -> None:
+    async def synthesize(
+        self, text: str, voice: str, output_path: str, rate: str = "+0%", retries: int = 4
+    ) -> None:
         text = text[:MAX_CHARS]
         for attempt in range(retries):
             try:

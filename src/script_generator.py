@@ -1,9 +1,10 @@
-import litellm
 from datetime import datetime, timezone
+
+import litellm
 
 litellm.suppress_debug_info = True
 
-LOCUTOR_KEYS = ['LOCUTOR_A', 'LOCUTOR_B', 'LOCUTOR_C']
+LOCUTOR_KEYS = ["LOCUTOR_A", "LOCUTOR_B", "LOCUTOR_C"]
 
 
 def _format_views(views: int) -> str:
@@ -11,12 +12,12 @@ def _format_views(views: int) -> str:
         return f"{views / 1_000_000:.1f} milhoes de visualizacoes"
     if views >= 1_000:
         return f"{int(views / 1_000)} mil visualizacoes"
-    return f"{views} visualizacoes" if views else ''
+    return f"{views} visualizacoes" if views else ""
 
 
 def _format_age(published_at: str) -> str:
     try:
-        dt = datetime.fromisoformat(published_at.replace('Z', '+00:00'))
+        dt = datetime.fromisoformat(published_at.replace("Z", "+00:00"))
         delta = datetime.now(timezone.utc) - dt
         days = delta.days
         if days == 0:
@@ -28,7 +29,7 @@ def _format_age(published_at: str) -> str:
             return f"ha {days} dias"
         return f"ha {days // 7} semana(s)"
     except Exception:
-        return ''
+        return ""
 
 
 def _narrator_block(narrators: list[dict]) -> str:
@@ -36,28 +37,28 @@ def _narrator_block(narrators: list[dict]) -> str:
     for i, n in enumerate(narrators):
         key = LOCUTOR_KEYS[i]
         lines.append(f"- {n['name']} ({key}): {n.get('personality', '')}")
-    return '\n'.join(lines)
+    return "\n".join(lines)
 
 
 def _format_block(narrators: list[dict]) -> str:
-    lines = ['FORMATO OBRIGATORIO (uma fala por linha):']
+    lines = ["FORMATO OBRIGATORIO (uma fala por linha):"]
     for i, n in enumerate(narrators):
         key = LOCUTOR_KEYS[i]
         lines.append(f"[{key}]: fala de {n['name']}")
-    return '\n'.join(lines)
+    return "\n".join(lines)
 
 
 def _build_video_card(i: int, item: dict) -> str:
-    views_str = _format_views(item.get('views', 0))
-    age_str = _format_age(item.get('published_at', ''))
-    meta = ', '.join(filter(None, [views_str, age_str]))
-    context = item.get('text', '') or item.get('description', '')
-    context_hint = f"\nContexto: {context}" if context else ''
-    comments = item.get('comments', [])
-    comments_hint = ''
+    views_str = _format_views(item.get("views", 0))
+    age_str = _format_age(item.get("published_at", ""))
+    meta = ", ".join(filter(None, [views_str, age_str]))
+    context = item.get("text", "") or item.get("description", "")
+    context_hint = f"\nContexto: {context}" if context else ""
+    comments = item.get("comments", [])
+    comments_hint = ""
     if comments:
         lines = [f'  - {c["author"]}: "{c["text"]}" ({c["likes"]} curtidas)' for c in comments]
-        comments_hint = '\nComentarios:\n' + '\n'.join(lines)
+        comments_hint = "\nComentarios:\n" + "\n".join(lines)
     return (
         f"[Video {i}]\n"
         f"Titulo: {item['title']}\n"
@@ -68,7 +69,7 @@ def _build_video_card(i: int, item: dict) -> str:
 
 
 def _build_news_card(i: int, item: dict) -> str:
-    age_str = _format_age(item.get('published_at', ''))
+    age_str = _format_age(item.get("published_at", ""))
     return (
         f"[Noticia {i}]\n"
         f"Titulo: {item['title']}\n"
@@ -87,24 +88,26 @@ def _build_receita_card(i: int, item: dict) -> str:
 
 
 def _build_horoscopo_card(i: int, item: dict) -> str:
-    return (
-        f"[Signo {i}: {item['title']}]\n"
-        f"Previsao: {item.get('text', '')}"
-    )
+    return f"[Signo {i}: {item['title']}]\n" f"Previsao: {item.get('text', '')}"
 
 
 def _build_reddit_card(i: int, item: dict) -> str:
-    score    = item.get('views', 0)
-    comments = item.get('num_comments', 0)
-    age_str  = _format_age(item.get('published_at', ''))
+    score = item.get("views", 0)
+    comments = item.get("num_comments", 0)
+    age_str = _format_age(item.get("published_at", ""))
     score_str = _format_views(score) if score >= 1000 else f"{score} upvotes"
-    meta = ', '.join(filter(None, [
-        score_str,
-        f"{comments} comentários" if comments else '',
-        age_str,
-    ]))
-    context = item.get('text', '')
-    context_hint = f"\nConteudo: {context}" if context else ''
+    meta = ", ".join(
+        filter(
+            None,
+            [
+                score_str,
+                f"{comments} comentários" if comments else "",
+                age_str,
+            ],
+        )
+    )
+    context = item.get("text", "")
+    context_hint = f"\nConteudo: {context}" if context else ""
     return (
         f"[Post {i}]\n"
         f"Titulo: {item['title']}\n"
@@ -115,105 +118,137 @@ def _build_reddit_card(i: int, item: dict) -> str:
 
 
 def _build_trivia_card(i: int, item: dict) -> str:
-    return (
-        f"[Pergunta {i}]\n"
-        f"Pergunta: {item['title']}\n"
-        f"{item.get('text', '')}"
-    )
+    return f"[Pergunta {i}]\n" f"Pergunta: {item['title']}\n" f"{item.get('text', '')}"
 
 
-DEFAULT_MODEL = 'claude-sonnet-4-6'
+DEFAULT_MODEL = "claude-sonnet-4-6"
 
 
-def generate_script(items: list[dict], narrators: list[dict], source_config: dict,
-                    is_first_of_day: bool = True,
-                    station_name: str = 'RadioIA',
-                    model: str = DEFAULT_MODEL,
-                    api_base: str | None = None) -> str:
+def generate_script(
+    items: list[dict],
+    narrators: list[dict],
+    source_config: dict,
+    is_first_of_day: bool = True,
+    station_name: str = "RadioIA",
+    model: str = DEFAULT_MODEL,
+    api_base: str | None = None,
+) -> str:
 
     n = min(len(narrators), 3)
     active = narrators[:n]
-    source_type = source_config.get('type', 'youtube')
-    source_name = source_config.get('name', station_name)
-    names = [nr['name'] for nr in active]
+    source_type = source_config.get("type", "youtube")
+    source_name = source_config.get("name", station_name)
+    names = [nr["name"] for nr in active]
 
-    if source_type == 'podcast':
-        cards  = [_build_podcast_card(i, item) for i, item in enumerate(items, 1)]
-        prompt = _podcast_prompt(active, names, source_name, '\n\n'.join(cards), is_first_of_day, station_name)
-    elif source_type == 'clipping':
-        cards    = [_build_clipping_card(i, item) for i, item in enumerate(items, 1)]
-        followup = bool((source_config.get('settings') or {}).get('followup', False))
-        prompt   = _clipping_prompt(active, names, source_name, '\n\n'.join(cards), is_first_of_day, station_name, followup)
-    elif source_type == 'whatsapp':
+    if source_type == "podcast":
+        cards = [_build_podcast_card(i, item) for i, item in enumerate(items, 1)]
+        prompt = _podcast_prompt(
+            active, names, source_name, "\n\n".join(cards), is_first_of_day, station_name
+        )
+    elif source_type == "clipping":
+        cards = [_build_clipping_card(i, item) for i, item in enumerate(items, 1)]
+        followup = bool((source_config.get("settings") or {}).get("followup", False))
+        prompt = _clipping_prompt(
+            active, names, source_name, "\n\n".join(cards), is_first_of_day, station_name, followup
+        )
+    elif source_type == "whatsapp":
         cards = [_build_whatsapp_card(i, item) for i, item in enumerate(items, 1)]
-        prompt = _whatsapp_prompt(active, names, source_name, '\n\n'.join(cards), is_first_of_day, station_name)
-    elif source_type == 'biblia':
+        prompt = _whatsapp_prompt(
+            active, names, source_name, "\n\n".join(cards), is_first_of_day, station_name
+        )
+    elif source_type == "biblia":
         cards = [_build_biblia_card(i, item) for i, item in enumerate(items, 1)]
-        prompt = _biblia_prompt(active, names, source_name, '\n\n'.join(cards), is_first_of_day, station_name)
-    elif source_type == 'filmes':
+        prompt = _biblia_prompt(
+            active, names, source_name, "\n\n".join(cards), is_first_of_day, station_name
+        )
+    elif source_type == "filmes":
         cards = [_build_filmes_card(i, item) for i, item in enumerate(items, 1)]
-        prompt = _filmes_prompt(active, names, source_name, '\n\n'.join(cards), is_first_of_day, station_name)
-    elif source_type == 'url':
-        cards   = [_build_url_card(i, item) for i, item in enumerate(items, 1)]
-        context = (source_config.get('settings') or {}).get('context', '')
-        prompt  = _url_prompt(active, names, source_name, '\n\n'.join(cards),
-                              is_first_of_day, station_name, context, len(items))
-    elif source_type == 'receitas':
+        prompt = _filmes_prompt(
+            active, names, source_name, "\n\n".join(cards), is_first_of_day, station_name
+        )
+    elif source_type == "url":
+        cards = [_build_url_card(i, item) for i, item in enumerate(items, 1)]
+        context = (source_config.get("settings") or {}).get("context", "")
+        prompt = _url_prompt(
+            active,
+            names,
+            source_name,
+            "\n\n".join(cards),
+            is_first_of_day,
+            station_name,
+            context,
+            len(items),
+        )
+    elif source_type == "receitas":
         cards = [_build_receita_card(i, item) for i, item in enumerate(items, 1)]
-        prompt = _receitas_prompt(active, names, source_name, '\n\n'.join(cards), is_first_of_day, station_name)
-    elif source_type == 'horoscopo':
+        prompt = _receitas_prompt(
+            active, names, source_name, "\n\n".join(cards), is_first_of_day, station_name
+        )
+    elif source_type == "horoscopo":
         cards = [_build_horoscopo_card(i, item) for i, item in enumerate(items, 1)]
-        prompt = _horoscopo_prompt(active, names, source_name, '\n\n'.join(cards), is_first_of_day, station_name)
-    elif source_type == 'rss' or source_type == 'efemerides':
+        prompt = _horoscopo_prompt(
+            active, names, source_name, "\n\n".join(cards), is_first_of_day, station_name
+        )
+    elif source_type == "rss" or source_type == "efemerides":
         cards = [_build_news_card(i, item) for i, item in enumerate(items, 1)]
-        prompt = _news_prompt(active, names, source_name, '\n\n'.join(cards), is_first_of_day, station_name)
-    elif source_type == 'reddit':
+        prompt = _news_prompt(
+            active, names, source_name, "\n\n".join(cards), is_first_of_day, station_name
+        )
+    elif source_type == "reddit":
         cards = [_build_reddit_card(i, item) for i, item in enumerate(items, 1)]
-        prompt = _reddit_prompt(active, names, source_name, '\n\n'.join(cards), is_first_of_day, station_name)
-    elif source_type == 'trivia':
+        prompt = _reddit_prompt(
+            active, names, source_name, "\n\n".join(cards), is_first_of_day, station_name
+        )
+    elif source_type == "trivia":
         cards = [_build_trivia_card(i, item) for i, item in enumerate(items, 1)]
-        prompt = _trivia_prompt(active, names, source_name, '\n\n'.join(cards), is_first_of_day, station_name)
+        prompt = _trivia_prompt(
+            active, names, source_name, "\n\n".join(cards), is_first_of_day, station_name
+        )
     else:
         cards = [_build_video_card(i, item) for i, item in enumerate(items, 1)]
-        prompt = _radio_prompt(active, names, source_name, '\n\n'.join(cards), is_first_of_day, station_name)
+        prompt = _radio_prompt(
+            active, names, source_name, "\n\n".join(cards), is_first_of_day, station_name
+        )
 
-    kwargs = {'api_base': api_base} if api_base else {}
+    kwargs = {"api_base": api_base} if api_base else {}
     response = litellm.completion(
-        model=model,
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=4096,
-        **kwargs
+        model=model, messages=[{"role": "user", "content": prompt}], max_tokens=4096, **kwargs
     )
     return response.choices[0].message.content
 
 
-def _radio_prompt(narrators: list[dict], names: list[str], station: str,
-                  content: str, is_first_of_day: bool = True,
-                  station_name: str = 'RadioIA') -> str:
+def _radio_prompt(
+    narrators: list[dict],
+    names: list[str],
+    station: str,
+    content: str,
+    is_first_of_day: bool = True,
+    station_name: str = "RadioIA",
+) -> str:
     n = len(narrators)
     narrator_block = _narrator_block(narrators)
     format_block = _format_block(narrators)
-    names_str = ', '.join(names[:-1]) + f' e {names[-1]}' if n > 1 else names[0]
+    names_str = ", ".join(names[:-1]) + f" e {names[-1]}" if n > 1 else names[0]
     falas_por_video = 3 + n
 
     solo_note = (
         "- E um programa solo: use so [LOCUTOR_A], tom envolvente e direto ao ouvinte"
-        if n == 1 else
-        f"- Distribua as falas entre os {n} apresentadores de forma equilibrada"
+        if n == 1
+        else f"- Distribua as falas entre os {n} apresentadores de forma equilibrada"
     )
 
     if is_first_of_day:
         abertura = (
             f"1. ABERTURA DO DIA: {names_str} dao bom dia, se apresentam pelo nome, "
-            f'dizem que os ouvintes estao na {station_name}, '
+            f"dizem que os ouvintes estao na {station_name}, "
             f'apresentam o segmento "{station}" e antecipam os destaques com energia (4-5 falas)'
         )
         encerramento = "4. Encerramento: convide o ouvinte a continuar ouvindo a programacao do dia (2-3 falas)"
     else:
         abertura = (
-            f'1. ENTRADA DE SEGMENTO: entre como continuacao da programacao — algo como '
+            f"1. ENTRADA DE SEGMENTO: entre como continuacao da programacao — algo como "
             f'"E chegou a hora do {station}!", "Voltamos com {station}..." ou similar. '
-            f'SEM bom dia, SEM apresentacao de nomes. (2-3 falas)'
+            f"SEM bom dia, SEM apresentacao de nomes. (2-3 falas)"
         )
         encerramento = "4. Encerramento rapido sinalizando que a programacao continua (1-2 falas)"
 
@@ -251,32 +286,37 @@ VIDEOS DO DIA:
 Roteiro:"""
 
 
-def _news_prompt(narrators: list[dict], names: list[str], source_name: str,
-                 content: str, is_first_of_day: bool = True,
-                 station_name: str = 'RadioIA') -> str:
+def _news_prompt(
+    narrators: list[dict],
+    names: list[str],
+    source_name: str,
+    content: str,
+    is_first_of_day: bool = True,
+    station_name: str = "RadioIA",
+) -> str:
     n = len(narrators)
     narrator_block = _narrator_block(narrators)
     format_block = _format_block(narrators)
-    names_str = ', '.join(names[:-1]) + f' e {names[-1]}' if n > 1 else names[0]
+    names_str = ", ".join(names[:-1]) + f" e {names[-1]}" if n > 1 else names[0]
 
     solo_note = (
         "- Apresentacao solo: fale diretamente com o ouvinte, tom jornalistico e preciso"
-        if n == 1 else
-        f"- Distribua as falas de forma equilibrada entre os {n} apresentadores"
+        if n == 1
+        else f"- Distribua as falas de forma equilibrada entre os {n} apresentadores"
     )
 
     if is_first_of_day:
         abertura = (
             f"1. ABERTURA DO DIA: {names_str} dao bom dia, se apresentam, "
-            f'dizem que os ouvintes estao na {station_name} e anunciam '
+            f"dizem que os ouvintes estao na {station_name} e anunciam "
             f'o boletim "{source_name}" com os principais temas (3-4 falas)'
         )
         encerramento = "4. Encerramento: convide o ouvinte a continuar na programacao (2-3 falas)"
     else:
         abertura = (
-            f'1. ENTRADA DE BOLETIM: entre direto como um novo bloco — '
+            f"1. ENTRADA DE BOLETIM: entre direto como um novo bloco — "
             f'"Agora, {source_name}...", "E nas noticias..." ou similar. '
-            f'SEM bom dia, SEM reapresentacao. (2 falas)'
+            f"SEM bom dia, SEM reapresentacao. (2 falas)"
         )
         encerramento = "4. Encerramento curto indicando que a programacao segue (1-2 falas)"
 
@@ -312,24 +352,29 @@ NOTICIAS:
 Roteiro:"""
 
 
-def _trivia_prompt(narrators: list[dict], names: list[str], source_name: str,
-                   content: str, is_first_of_day: bool = True,
-                   station_name: str = 'RadioIA') -> str:
+def _trivia_prompt(
+    narrators: list[dict],
+    names: list[str],
+    source_name: str,
+    content: str,
+    is_first_of_day: bool = True,
+    station_name: str = "RadioIA",
+) -> str:
     n = len(narrators)
     narrator_block = _narrator_block(narrators)
-    format_block   = _format_block(narrators)
-    names_str = ', '.join(names[:-1]) + f' e {names[-1]}' if n > 1 else names[0]
+    format_block = _format_block(narrators)
+    names_str = ", ".join(names[:-1]) + f" e {names[-1]}" if n > 1 else names[0]
 
     solo_note = (
         "- Programa solo: alterne entre apresentar a pergunta e revelar a resposta, tom animado"
-        if n == 1 else
-        f"- Distribua: um apresentador lê a pergunta, outro revela a resposta — alterne a cada pergunta"
+        if n == 1
+        else "- Distribua: um apresentador lê a pergunta, outro revela a resposta — alterne a cada pergunta"
     )
 
     if is_first_of_day:
         abertura = (
             f"1. ABERTURA: {names_str} dao bom dia, dizem que os ouvintes estao na {station_name}, "
-            f"apresentam o quiz \"{source_name}\" "
+            f'apresentam o quiz "{source_name}" '
             f"com energia de game show e convidam o ouvinte a participar (3-4 falas)"
         )
         encerramento = "5. Encerramento: pontuacao imaginaria, elogio ao ouvinte, convide a ficar na programacao (2-3 falas)"
@@ -378,31 +423,36 @@ PERGUNTAS:
 Roteiro:"""
 
 
-def _reddit_prompt(narrators: list[dict], names: list[str], source_name: str,
-                   content: str, is_first_of_day: bool = True,
-                   station_name: str = 'RadioIA') -> str:
+def _reddit_prompt(
+    narrators: list[dict],
+    names: list[str],
+    source_name: str,
+    content: str,
+    is_first_of_day: bool = True,
+    station_name: str = "RadioIA",
+) -> str:
     n = len(narrators)
     narrator_block = _narrator_block(narrators)
-    format_block   = _format_block(narrators)
-    names_str = ', '.join(names[:-1]) + f' e {names[-1]}' if n > 1 else names[0]
+    format_block = _format_block(narrators)
+    names_str = ", ".join(names[:-1]) + f" e {names[-1]}" if n > 1 else names[0]
 
     solo_note = (
         "- Apresentacao solo: comente os posts diretamente com o ouvinte, tom de conversa"
-        if n == 1 else
-        f"- Distribua as falas de forma equilibrada entre os {n} apresentadores"
+        if n == 1
+        else f"- Distribua as falas de forma equilibrada entre os {n} apresentadores"
     )
 
     if is_first_of_day:
         abertura = (
             f"1. ABERTURA DO DIA: {names_str} dao bom dia, dizem que os ouvintes estao na {station_name}, "
-            f"apresentam o \"{source_name}\" "
+            f'apresentam o "{source_name}" '
             f"explicando que vao trazer o que esta bombando na internet hoje (3-4 falas)"
         )
         encerramento = "4. Encerramento: convide o ouvinte a continuar na programacao (2 falas)"
     else:
         abertura = (
-            f'1. ENTRADA: entre direto no assunto — "O que ta bombando no Reddit agora...", '
-            f'"A internet ta discutindo..." ou similar. SEM bom dia. (2 falas)'
+            '1. ENTRADA: entre direto no assunto — "O que ta bombando no Reddit agora...", '
+            '"A internet ta discutindo..." ou similar. SEM bom dia. (2 falas)'
         )
         encerramento = "4. Encerramento rapido sinalizando que a programacao continua (1-2 falas)"
 
@@ -441,18 +491,23 @@ POSTS:
 Roteiro:"""
 
 
-def _horoscopo_prompt(narrators: list[dict], names: list[str], source_name: str,
-                      content: str, is_first_of_day: bool = True,
-                      station_name: str = 'RadioIA') -> str:
+def _horoscopo_prompt(
+    narrators: list[dict],
+    names: list[str],
+    source_name: str,
+    content: str,
+    is_first_of_day: bool = True,
+    station_name: str = "RadioIA",
+) -> str:
     n = len(narrators)
     narrator_block = _narrator_block(narrators)
-    format_block   = _format_block(narrators)
-    names_str = ', '.join(names[:-1]) + f' e {names[-1]}' if n > 1 else names[0]
+    format_block = _format_block(narrators)
+    names_str = ", ".join(names[:-1]) + f" e {names[-1]}" if n > 1 else names[0]
 
     solo_note = (
         "- Apresentacao solo: apresente cada signo diretamente ao ouvinte, tom mistico e caloroso"
-        if n == 1 else
-        "- Cada apresentador 'assume' um signo — um le a previsao enquanto o outro reage ou complementa"
+        if n == 1
+        else "- Cada apresentador 'assume' um signo — um le a previsao enquanto o outro reage ou complementa"
     )
 
     if is_first_of_day:
@@ -464,8 +519,8 @@ def _horoscopo_prompt(narrators: list[dict], names: list[str], source_name: str,
         encerramento = "4. Encerramento: deseje um ótimo dia aos ouvintes e convide a continuar na programacao (2 falas)"
     else:
         abertura = (
-            f'1. ENTRADA: entre com mistério — "Os astros têm mensagem para dois signos...", '
-            f'"Hora de saber o que o universo reserva..." ou similar. SEM bom dia. (1-2 falas)'
+            '1. ENTRADA: entre com mistério — "Os astros têm mensagem para dois signos...", '
+            '"Hora de saber o que o universo reserva..." ou similar. SEM bom dia. (1-2 falas)'
         )
         encerramento = "4. Encerramento curto desejando que as energias se manifestem (1-2 falas)"
 
@@ -506,30 +561,32 @@ Roteiro:"""
 
 
 def _build_filmes_card(i: int, item: dict) -> str:
-    return (
-        f"[Filme {i}: {item['title']}]\n"
-        f"{item.get('text', '')}"
-    )
+    return f"[Filme {i}: {item['title']}]\n" f"{item.get('text', '')}"
 
 
-def _filmes_prompt(narrators: list[dict], names: list[str], source_name: str,
-                   content: str, is_first_of_day: bool = True,
-                   station_name: str = 'RadioIA') -> str:
+def _filmes_prompt(
+    narrators: list[dict],
+    names: list[str],
+    source_name: str,
+    content: str,
+    is_first_of_day: bool = True,
+    station_name: str = "RadioIA",
+) -> str:
     n = len(narrators)
     narrator_block = _narrator_block(narrators)
-    format_block   = _format_block(narrators)
-    names_str = ', '.join(names[:-1]) + f' e {names[-1]}' if n > 1 else names[0]
+    format_block = _format_block(narrators)
+    names_str = ", ".join(names[:-1]) + f" e {names[-1]}" if n > 1 else names[0]
 
     solo_note = (
         "- Apresentacao solo: alterne entre recomendar e reagir, como cinefilo apaixonado"
-        if n == 1 else
-        "- Um apresentador recomenda, o outro reage — troquem esse papel entre os filmes"
+        if n == 1
+        else "- Um apresentador recomenda, o outro reage — troquem esse papel entre os filmes"
     )
 
     if is_first_of_day:
         abertura = (
             f"1. ABERTURA: {names_str} dao bom dia, dizem que os ouvintes estao na {station_name} "
-            f"e apresentam o quadro \"{source_name}\" "
+            f'e apresentam o quadro "{source_name}" '
             f"com entusiasmo — criem expectativa sobre os filmes (2-3 falas)"
         )
         encerramento = "5. Encerramento convidando o ouvinte a conferir os filmes e continuar na programacao (2 falas)"
@@ -577,10 +634,10 @@ Roteiro:"""
 
 
 def _build_podcast_card(i: int, item: dict) -> str:
-    topic = item.get('topic', '')
-    range_label = item.get('range_label', '')
-    topic_hint = f'\nFoco: {topic}' if topic else ''
-    range_hint = f'\nTrecho coberto: {range_label}' if range_label else ''
+    topic = item.get("topic", "")
+    range_label = item.get("range_label", "")
+    topic_hint = f"\nFoco: {topic}" if topic else ""
+    range_hint = f"\nTrecho coberto: {range_label}" if range_label else ""
     return (
         f"[Episódio {i}: {item['title']}]\n"
         f"Podcast: {item.get('channel', item.get('source_name', ''))}"
@@ -589,18 +646,23 @@ def _build_podcast_card(i: int, item: dict) -> str:
     )
 
 
-def _podcast_prompt(narrators: list[dict], names: list[str], source_name: str,
-                    content: str, is_first_of_day: bool = True,
-                    station_name: str = 'RadioIA') -> str:
+def _podcast_prompt(
+    narrators: list[dict],
+    names: list[str],
+    source_name: str,
+    content: str,
+    is_first_of_day: bool = True,
+    station_name: str = "RadioIA",
+) -> str:
     n = len(narrators)
     narrator_block = _narrator_block(narrators)
-    format_block   = _format_block(narrators)
-    names_str = ', '.join(names[:-1]) + f' e {names[-1]}' if n > 1 else names[0]
+    format_block = _format_block(narrators)
+    names_str = ", ".join(names[:-1]) + f" e {names[-1]}" if n > 1 else names[0]
 
     solo_note = (
         "- Apresentação solo: conduza o resumo diretamente com o ouvinte, tom de curador de conteúdo"
-        if n == 1 else
-        f"- Distribua as falas entre os {n} apresentadores — um pode resumir enquanto o outro comenta"
+        if n == 1
+        else f"- Distribua as falas entre os {n} apresentadores — um pode resumir enquanto o outro comenta"
     )
 
     if is_first_of_day:
@@ -664,27 +726,32 @@ def _build_clipping_card(i: int, item: dict) -> str:
     )
 
 
-def _clipping_prompt(narrators: list[dict], names: list[str], source_name: str,
-                     content: str, is_first_of_day: bool = True,
-                     station_name: str = 'RadioIA',
-                     followup: bool = False) -> str:
+def _clipping_prompt(
+    narrators: list[dict],
+    names: list[str],
+    source_name: str,
+    content: str,
+    is_first_of_day: bool = True,
+    station_name: str = "RadioIA",
+    followup: bool = False,
+) -> str:
     n = len(narrators)
     narrator_block = _narrator_block(narrators)
-    format_block   = _format_block(narrators)
-    names_str = ', '.join(names[:-1]) + f' e {names[-1]}' if n > 1 else names[0]
+    format_block = _format_block(narrators)
+    names_str = ", ".join(names[:-1]) + f" e {names[-1]}" if n > 1 else names[0]
 
     solo_note = (
         "- Apresentacao solo: conduza a análise diretamente com o ouvinte, tom jornalístico"
-        if n == 1 else
-        f"- Distribua as falas entre os {n} apresentadores — um pode questionar, outro contextualizar"
+        if n == 1
+        else f"- Distribua as falas entre os {n} apresentadores — um pode questionar, outro contextualizar"
     )
 
     if followup:
         abertura = (
-            '1. ENTRADA DE CONTINUIDADE: retome o assunto como desdobramento — '
+            "1. ENTRADA DE CONTINUIDADE: retome o assunto como desdobramento — "
             '"A repercussão continua...", "Novos detalhes surgiram sobre...", '
             '"A mídia segue acompanhando..." ou similar. '
-            'SEM bom dia, SEM apresentação do assunto do zero. (1-2 falas)'
+            "SEM bom dia, SEM apresentação do assunto do zero. (1-2 falas)"
         )
         tarefa = (
             "Você receberá nova cobertura da mídia sobre um assunto que JÁ FOI apresentado anteriormente.\n"
@@ -697,12 +764,14 @@ def _clipping_prompt(narrators: list[dict], names: list[str], source_name: str,
             "3. Para cada veículo: o que ele traz de diferente ou inédito — novo ângulo, nova fonte, novo dado (1-2 falas cada)\n"
             "4. Síntese: como a cobertura evoluiu? O que ainda está em aberto? (2-3 falas)"
         )
-        encerramento = "5. Encerramento sinalizando que o assunto continua sendo acompanhado (1-2 falas)"
+        encerramento = (
+            "5. Encerramento sinalizando que o assunto continua sendo acompanhado (1-2 falas)"
+        )
     else:
         if is_first_of_day:
             abertura = (
                 f"1. ABERTURA: {names_str} dao bom dia, dizem que os ouvintes estao na {station_name} "
-                f'e apresentam o clipping — o que a mídia está falando sobre o assunto do dia (2-3 falas)'
+                f"e apresentam o clipping — o que a mídia está falando sobre o assunto do dia (2-3 falas)"
             )
         else:
             abertura = (
@@ -758,24 +827,26 @@ Roteiro:"""
 
 
 def _build_whatsapp_card(i: int, item: dict) -> str:
-    return (
-        f"[Grupo: {item['title']}]\n"
-        f"{item.get('text', '')}"
-    )
+    return f"[Grupo: {item['title']}]\n" f"{item.get('text', '')}"
 
 
-def _whatsapp_prompt(narrators: list[dict], names: list[str], source_name: str,
-                     content: str, is_first_of_day: bool = True,
-                     station_name: str = 'RadioIA') -> str:
+def _whatsapp_prompt(
+    narrators: list[dict],
+    names: list[str],
+    source_name: str,
+    content: str,
+    is_first_of_day: bool = True,
+    station_name: str = "RadioIA",
+) -> str:
     n = len(narrators)
     narrator_block = _narrator_block(narrators)
-    format_block   = _format_block(narrators)
-    names_str = ', '.join(names[:-1]) + f' e {names[-1]}' if n > 1 else names[0]
+    format_block = _format_block(narrators)
+    names_str = ", ".join(names[:-1]) + f" e {names[-1]}" if n > 1 else names[0]
 
     solo_note = (
         "- Apresentacao solo: comente os assuntos diretamente com o ouvinte, tom de conversa"
-        if n == 1 else
-        f"- Distribua as falas de forma equilibrada entre os {n} apresentadores"
+        if n == 1
+        else f"- Distribua as falas de forma equilibrada entre os {n} apresentadores"
     )
 
     if is_first_of_day:
@@ -837,18 +908,23 @@ def _build_biblia_card(i: int, item: dict) -> str:
     )
 
 
-def _biblia_prompt(narrators: list[dict], names: list[str], source_name: str,
-                   content: str, is_first_of_day: bool = True,
-                   station_name: str = 'RadioIA') -> str:
+def _biblia_prompt(
+    narrators: list[dict],
+    names: list[str],
+    source_name: str,
+    content: str,
+    is_first_of_day: bool = True,
+    station_name: str = "RadioIA",
+) -> str:
     n = len(narrators)
     narrator_block = _narrator_block(narrators)
-    format_block   = _format_block(narrators)
-    names_str = ', '.join(names[:-1]) + f' e {names[-1]}' if n > 1 else names[0]
+    format_block = _format_block(narrators)
+    names_str = ", ".join(names[:-1]) + f" e {names[-1]}" if n > 1 else names[0]
 
     solo_note = (
         "- Apresentacao solo: conduza a reflexao diretamente com o ouvinte, tom intimo e acolhedor"
-        if n == 1 else
-        f"- Distribua as falas entre os {n} apresentadores de forma equilibrada"
+        if n == 1
+        else f"- Distribua as falas entre os {n} apresentadores de forma equilibrada"
     )
 
     if is_first_of_day:
@@ -859,8 +935,8 @@ def _biblia_prompt(narrators: list[dict], names: list[str], source_name: str,
         encerramento = "4. Encerramento: deseje uma reflexao proveitosa ao ouvinte e convide a continuar na programacao (2 falas)"
     else:
         abertura = (
-            f'1. ENTRADA: entre com leveza espiritual — "Chegou o momento da nossa Palavra do Dia...", '
-            f'"Paramos um instante para uma reflexao especial..." ou similar. SEM bom dia. (1-2 falas)'
+            '1. ENTRADA: entre com leveza espiritual — "Chegou o momento da nossa Palavra do Dia...", '
+            '"Paramos um instante para uma reflexao especial..." ou similar. SEM bom dia. (1-2 falas)'
         )
         encerramento = "4. Encerramento curto desejando paz e bencaos ao ouvinte (1-2 falas)"
 
@@ -899,9 +975,9 @@ Roteiro:"""
 
 
 def _build_url_card(i: int, item: dict) -> str:
-    age_str  = _format_age(item.get('published_at', ''))
-    sitename = item.get('source_name', item.get('channel', 'Web'))
-    pub_info = f"\nPublicada: {age_str}" if age_str else ''
+    age_str = _format_age(item.get("published_at", ""))
+    sitename = item.get("source_name", item.get("channel", "Web"))
+    pub_info = f"\nPublicada: {age_str}" if age_str else ""
     return (
         f"[Fonte {i}: {sitename}]\n"
         f"Titulo: {item['title']}\n"
@@ -911,19 +987,25 @@ def _build_url_card(i: int, item: dict) -> str:
     )
 
 
-def _url_prompt(narrators: list[dict], names: list[str], source_name: str,
-                content: str, is_first_of_day: bool = True,
-                station_name: str = 'RadioIA',
-                context: str = '', num_items: int = 1) -> str:
+def _url_prompt(
+    narrators: list[dict],
+    names: list[str],
+    source_name: str,
+    content: str,
+    is_first_of_day: bool = True,
+    station_name: str = "RadioIA",
+    context: str = "",
+    num_items: int = 1,
+) -> str:
     n = len(narrators)
     narrator_block = _narrator_block(narrators)
-    format_block   = _format_block(narrators)
-    names_str = ', '.join(names[:-1]) + f' e {names[-1]}' if n > 1 else names[0]
+    format_block = _format_block(narrators)
+    names_str = ", ".join(names[:-1]) + f" e {names[-1]}" if n > 1 else names[0]
 
     solo_note = (
         "- Apresentacao solo: adapte o tom ao tipo de conteudo, fale diretamente com o ouvinte"
-        if n == 1 else
-        f"- Distribua as falas entre os {n} apresentadores; quem reage, quem comenta, quem contextualiza"
+        if n == 1
+        else f"- Distribua as falas entre os {n} apresentadores; quem reage, quem comenta, quem contextualiza"
     )
 
     if num_items > 1:
@@ -942,13 +1024,15 @@ def _url_prompt(narrators: list[dict], names: list[str], source_name: str,
             "   - Outros: adapte naturalmente"
         )
 
-    context_block = f"\nINSTRUCAO DO PRODUTOR: {context}\n" if context else ''
+    context_block = f"\nINSTRUCAO DO PRODUTOR: {context}\n" if context else ""
 
     if is_first_of_day:
         abertura = f"1. ABERTURA: {names_str} dao bom dia, dizem que estao na {station_name} e apresentam o que vem por ai (2 falas)"
         encerramento = "4. Encerramento convidando o ouvinte a continuar na programacao (1-2 falas)"
     else:
-        abertura = "1. ENTRADA direta no conteudo, sem bom dia nem apresentacao de nomes (1-2 falas)"
+        abertura = (
+            "1. ENTRADA direta no conteudo, sem bom dia nem apresentacao de nomes (1-2 falas)"
+        )
         encerramento = "4. Encerramento rapido sinalizando continuidade da programacao (1 fala)"
 
     return f"""Voce e um roteirista de radio FM brasileira.
@@ -985,24 +1069,29 @@ CONTEUDO:
 Roteiro:"""
 
 
-def _receitas_prompt(narrators: list[dict], names: list[str], source_name: str,
-                     content: str, is_first_of_day: bool = True,
-                     station_name: str = 'RadioIA') -> str:
+def _receitas_prompt(
+    narrators: list[dict],
+    names: list[str],
+    source_name: str,
+    content: str,
+    is_first_of_day: bool = True,
+    station_name: str = "RadioIA",
+) -> str:
     n = len(narrators)
     narrator_block = _narrator_block(narrators)
-    format_block   = _format_block(narrators)
-    names_str = ', '.join(names[:-1]) + f' e {names[-1]}' if n > 1 else names[0]
+    format_block = _format_block(narrators)
+    names_str = ", ".join(names[:-1]) + f" e {names[-1]}" if n > 1 else names[0]
 
     solo_note = (
         "- Apresentacao solo: alterne entre apresentar a receita e reagir a ela, como se estivesse experimentando mentalmente"
-        if n == 1 else
-        "- Um apresentador conduz a receita, o outro reage, faz perguntas e acrescenta dicas — troquem esse papel naturalmente"
+        if n == 1
+        else "- Um apresentador conduz a receita, o outro reage, faz perguntas e acrescenta dicas — troquem esse papel naturalmente"
     )
 
     if is_first_of_day:
         abertura = (
             f"1. ABERTURA: {names_str} dao bom dia, dizem que os ouvintes estao na {station_name} "
-            f"e apresentam o quadro \"{source_name}\" "
+            f'e apresentam o quadro "{source_name}" '
             f"com apetite — criem expectativa sobre o prato do dia (2-3 falas)"
         )
         encerramento = "5. Encerramento: convide o ouvinte a experimentar em casa e continue na programacao (2 falas)"

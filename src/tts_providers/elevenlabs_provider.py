@@ -22,19 +22,18 @@ import os
 
 class ElevenLabsProvider:
     def __init__(self, config: dict):
-        self._config    = config or {}
-        self._model     = self._config.get('model', 'eleven_multilingual_v2')
-        env_var         = self._config.get('api_key_env', 'ELEVENLABS_API_KEY')
-        self._api_key   = os.getenv(env_var)
-        self._voice_map = self._config.get('voice_map') or {}
+        self._config = config or {}
+        self._model = self._config.get("model", "eleven_multilingual_v2")
+        env_var = self._config.get("api_key_env", "ELEVENLABS_API_KEY")
+        self._api_key = os.getenv(env_var)
+        self._voice_map = self._config.get("voice_map") or {}
 
     def _resolve_voice(self, voice: str) -> str:
         return self._voice_map.get(voice, voice)
 
-    async def synthesize(self, text: str, voice: str, output_path: str,
-                         rate: str = '+0%') -> None:
+    async def synthesize(self, text: str, voice: str, output_path: str, rate: str = "+0%") -> None:
         try:
-            import elevenlabs
+            import elevenlabs  # noqa: F401
         except ImportError:
             raise RuntimeError("Provider ElevenLabs requer: pip install elevenlabs")
 
@@ -45,14 +44,15 @@ class ElevenLabsProvider:
 
         def _sync():
             from elevenlabs.client import ElevenLabs
+
             client = ElevenLabs(api_key=self._api_key)
-            audio  = client.text_to_speech.convert(
+            audio = client.text_to_speech.convert(
                 voice_id=resolved,
                 text=text,
                 model_id=self._model,
-                output_format='mp3_44100_128',
+                output_format="mp3_44100_128",
             )
-            with open(output_path, 'wb') as f:
+            with open(output_path, "wb") as f:
                 for chunk in audio:
                     if chunk:
                         f.write(chunk)
