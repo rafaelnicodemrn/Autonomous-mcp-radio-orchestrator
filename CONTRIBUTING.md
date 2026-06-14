@@ -3,8 +3,8 @@
 ## Setup do ambiente local
 
 ```bash
-git clone https://github.com/fabianoallex/radioIA.git
-cd radioIA
+git clone https://github.com/rafaelnicodemrn/Autonomous-mcp-radio-orchestrator.git
+cd Autonomous-mcp-radio-orchestrator
 
 # venv
 python -m venv .venv

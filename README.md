@@ -31,8 +31,8 @@ Fontes → Conteúdo → Claude (roteiro) → TTS (áudio) → Episódio MP3
 
 ```bash
 # Clone o repositório
-git clone https://github.com/fabianoallex/radioIA.git
-cd radioIA
+git clone https://github.com/rafaelnicodemrn/Autonomous-mcp-radio-orchestrator.git
+cd Autonomous-mcp-radio-orchestrator
 
 # Instale as dependências
 pip install -r requirements.txt

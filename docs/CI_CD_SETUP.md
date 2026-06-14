@@ -5,22 +5,14 @@ Checklist de configuração única para habilitar o pipeline
 produção (SSH) e às configurações do repositório no GitHub — passos manuais,
 não automatizáveis.
 
-## 0. Acesso ao repositório (pré-requisito)
+## 0. Acesso ao repositório (resolvido)
 
-O repositório `fabianoallex/radioIA` está sob a conta `fabianoallex`. A conta
-autenticada via `gh auth login` (`rafaelnicodemrn`) tem apenas permissão
-**READ** — sem acesso para `git push`, configurar branch protection,
-environments ou secrets via `gh api`.
-
-Antes de seguir com as seções 2–4, é necessário um dos seguintes:
-
-- `fabianoallex` adicionar `rafaelnicodemrn` como colaborador com permissão
-  **Admin** (ou pelo menos **Write** para push + configuração manual pela
-  conta `fabianoallex` para branch protection/environment/secrets); ou
-- Transferir/criar o repositório sob a conta `rafaelnicodemrn`.
-
-As seções 2–4 abaixo (Secrets, Environment, Branch protection) precisam ser
-feitas por quem tiver permissão **Admin** no repositório.
+O projeto está hospedado em
+`https://github.com/rafaelnicodemrn/Autonomous-mcp-radio-orchestrator`
+(`origin`), com `rafaelnicodemrn` como **Admin**. `main` e `develop` foram
+enviados, o ambiente `production` foi criado e a branch protection de `main`
+já está configurada via `gh api` (seções 3 e 4). Falta apenas configurar os
+Secrets (seção 2) com valores reais.
 
 ## 1. Servidor de produção (GCP VM, via Cloud Console SSH)
 
@@ -51,34 +43,37 @@ cd ~/radioIA && git log --oneline -3
 > (`history -d <linha>` ou feche a sessão) — ela só deve existir no GitHub
 > Secret e em `~/.ssh/` na VM.
 
-## 2. GitHub Secrets
+## 2. GitHub Secrets (pendente — valores reais)
 
 **Settings → Secrets and variables → Actions → New repository secret**
+(ou `gh secret set <NOME> --env production --body "<valor>"`)
 
 | Secret                  | Valor                                              |
 |-------------------------|----------------------------------------------------|
 | `GCLOUD_SSH_PRIVATE_KEY` | Conteúdo completo de `~/.ssh/github_actions_key` na VM |
 | `TELEGRAM_BOT_TOKEN`     | Token real do bot (para testes de integração futuros) |
 
-## 3. GitHub Environment `production`
+> Sem `GCLOUD_SSH_PRIVATE_KEY`, o job `deploy` do `cd.yml` falha na etapa de
+> SSH — é o comportamento esperado até este secret ser configurado.
 
-**Settings → Environments → New environment → "production"**
+## 3. GitHub Environment `production` (concluído)
 
-- Deployment branches: restringir a `main`
-- Required reviewers: opcional (Rafael)
-- Adicionar os secrets da seção 2 ao environment
+Ambiente `production` criado via `gh api`, com
+`deployment_branch_policy.protected_branches = true` (restringe deploys a
+branches protegidas, ou seja, `main`). Adicionar os secrets da seção 2 ao
+ambiente quando disponíveis.
 
-## 4. Branch protection em `main`
+## 4. Branch protection em `main` (concluído)
 
-**Settings → Branches → Add branch protection rule** (padrão `main`):
+Configurado via `gh api repos/.../branches/main/protection`:
 
-- Require a pull request before merging (mínimo 1 aprovação, ou
-  auto-aprovação via CODEOWNERS para repo pessoal)
-- Require status checks to pass before merging → selecionar os jobs
-  `lint`, `test`, `security` do workflow `CI — Lint e Testes`
-- Require branches to be up to date before merging
-- Do not allow bypassing the above settings (incluindo administradores, se
-  desejado)
+- Required status checks (strict — branch precisa estar atualizada):
+  `Lint (flake8 + black + isort)`, `Testes Automatizados`,
+  `Segurança (bandit + pip-audit)`
+- `enforce_admins: false` (dono do repo pode mergear mesmo se um check
+  falhar, útil para repo pessoal — endurecer depois se desejado)
+- Sem exigência de PR review (repo de um único mantenedor)
+- Force push e deleção de `main` bloqueados
 
 ## 5. Validação pós-setup
 
