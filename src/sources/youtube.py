@@ -180,3 +180,53 @@ def fetch(source_config: dict, credentials=None) -> list[dict]:
         all_videos.extend(config_videos)
 
     return all_videos[:max_total]
+
+
+def search_youtube_by_keyword(query: str, youtube_service,
+                               max_results: int = 3,
+                               published_after_hours: int = 48) -> list:
+    """
+    Busca vídeos recentes no YouTube por keyword.
+    Retorna lista de itens no mesmo formato das outras sources.
+    """
+    from datetime import datetime, timezone, timedelta
+    import logging
+    logger = logging.getLogger(__name__)
+
+    published_after = datetime.now(timezone.utc) - timedelta(hours=published_after_hours)
+    published_after_str = published_after.strftime('%Y-%m-%dT%H:%M:%SZ')
+
+    try:
+        response = youtube_service.search().list(
+            part='snippet',
+            q=query,
+            type='video',
+            maxResults=max_results,
+            publishedAfter=published_after_str,
+            relevanceLanguage='pt',
+            regionCode='BR',
+            order='relevance',
+        ).execute()
+
+        items = []
+        for item in response.get('items', []):
+            video_id = item['id']['videoId']
+            snippet = item['snippet']
+            items.append({
+                'id': video_id,
+                'title': snippet.get('title', ''),
+                'url': f'https://youtube.com/watch?v={video_id}',
+                'text': snippet.get('description', '')[:300],
+                'source_name': snippet.get('channelTitle', 'YouTube'),
+                'source_id': 'youtube',
+                'source_type': 'youtube',
+                'published_at': snippet.get('publishedAt', ''),
+                'image': f'https://img.youtube.com/vi/{video_id}/maxresdefault.jpg',
+                'channel': snippet.get('channelTitle', ''),
+                'views': 0,
+            })
+        return items
+
+    except Exception as e:
+        logger.warning(f'[youtube_keyword] erro para "{query}": {e}')
+        return []
