@@ -81,10 +81,10 @@ com pesos dinâmicos. Detalhes em `docs/ADAPTIVE_SYSTEM.md` e
 ## CI/CD
 Fluxo: push → GitHub Actions CI (lint + testes) → merge na `main` → CD (rsync +
 restart systemd).
-- CI: `.github/workflows/ci.yml` — jobs `lint` (black/isort/flake8, hoje
-  `continue-on-error: true` até um `make format` inicial limpar o código),
-  `test` (pytest, com checagem de credenciais commitadas) e `security`
-  (bandit + pip-audit, `|| true`).
+- CI: `.github/workflows/ci.yml` — jobs `lint` (black/isort/flake8,
+  bloqueante; config compartilhada em `pyproject.toml` e per-file-ignores em
+  `setup.cfg`), `test` (pytest, com checagem de credenciais commitadas) e
+  `security` (bandit + pip-audit, `|| true`).
 - CD: `.github/workflows/cd.yml` — roda em push para `main`, reusa o CI,
   faz rsync para a VM (excluindo `config.yaml`, `adaptive_state.json`,
   `telegram_state.json`, `*.json`) e reinicia `radioia-bot` via systemd, com

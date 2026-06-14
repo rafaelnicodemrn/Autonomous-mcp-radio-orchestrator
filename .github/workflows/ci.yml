@@ -12,10 +12,10 @@ jobs:
     name: "Lint (flake8 + black + isort)"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: "pip"
@@ -23,19 +23,13 @@ jobs:
       - name: Instalar dependências de lint
         run: pip install flake8 black isort
 
-      # Lint roda em modo "advisory" enquanto o código não passa por um
-      # `make format` inicial. Após esse passo, remover o continue-on-error
-      # e tornar o job bloqueante.
       - name: black (verificação de formatação)
-        continue-on-error: true
         run: black --check --diff src/ telegram_bot.py
 
       - name: isort (verificação de imports)
-        continue-on-error: true
         run: isort --check-only --diff src/ telegram_bot.py
 
       - name: flake8 (estilo e erros)
-        continue-on-error: true
         run: |
           flake8 src/ telegram_bot.py \
             --max-line-length=100 \
@@ -54,10 +48,10 @@ jobs:
       PYTHONPATH: "."
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: "pip"
@@ -71,7 +65,7 @@ jobs:
         run: pytest tests/
 
       - name: Publicar cobertura
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         if: always()
         with:
           files: coverage.xml
@@ -93,10 +87,10 @@ jobs:
     name: "Segurança (bandit + pip-audit)"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
