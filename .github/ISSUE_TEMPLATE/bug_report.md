@@ -3,7 +3,7 @@ name: Bug report
 about: Reportar um problema no RadioIA
 title: "fix: "
 labels: bug
-assignees: rafaelnicodem
+assignees: rafaelnicodemrn
 ---
 
 ## Descrição do bug

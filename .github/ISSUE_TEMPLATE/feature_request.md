@@ -3,7 +3,7 @@ name: Feature request
 about: Sugerir uma nova funcionalidade para o RadioIA
 title: "feat: "
 labels: enhancement
-assignees: rafaelnicodem
+assignees: rafaelnicodemrn
 ---
 
 ## Problema / motivação
