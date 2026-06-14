@@ -4,6 +4,8 @@ credentials.json
 token.json
 client_secret*.json
 *_service_account.json
+*_credentials.json
+google-tts-credentials.json
 scheduler_state.json
 
 # ── Conteúdo gerado — grande e específico da instância ────────────────────────
@@ -12,6 +14,14 @@ music/
 
 # ── Estado de runtime ─────────────────────────────────────────────────────────
 history.json
+adaptive_state.json
+telegram_state.json
+
+# ── Testes e cobertura ────────────────────────────────────────────────────────
+.pytest_cache/
+htmlcov/
+.coverage
+coverage.xml
 
 # ── Python ────────────────────────────────────────────────────────────────────
 __pycache__/

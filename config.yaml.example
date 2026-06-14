@@ -1,0 +1,115 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# RadioIA — config.yaml.example
+# Cópia sem credenciais/dados pessoais, para CI/CD e onboarding.
+# Copie para config.yaml e ajuste com seus próprios valores.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+radio:
+  name: "RadioIA Pessoal"
+  background_music: ""
+  background_volume_db: -22
+
+llm:
+  model: "gemini/gemini-3.1-flash-lite"
+
+tts:
+  provider: google
+  google:
+    credentials_env: GOOGLE_APPLICATION_CREDENTIALS
+    language_code: pt-BR
+    voice_map:
+      pt-BR-ThalitaMultilingualNeural: pt-BR-Chirp3-HD-Aoede
+      pt-BR-AntonioNeural:             pt-BR-Chirp3-HD-Charon
+
+narrators:
+  - name: "Ana"
+    voice: "pt-BR-ThalitaMultilingualNeural"
+    personality: "descontraída, curiosa e bem-humorada"
+  - name: "Carlos"
+    voice: "pt-BR-AntonioNeural"
+    personality: "analítico e direto"
+
+vinheta:
+  voice: "pt-BR-FranciscaNeural"
+  rate: "+15%"
+
+announcements:
+  enabled: true
+
+spots:
+  - id: reflexao-exemplo
+    type: llm
+    topic: "Uma reflexão breve e inspiradora para o dia"
+    duration_seconds: 30
+    max_per_day: 2
+
+spots_config:
+  fallback_every: 0
+  between_episodes_every: 0
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# FONTES (exemplo reduzido — ver config.yaml real para a lista completa)
+# ═══════════════════════════════════════════════════════════════════════════════
+sources:
+  - id: noticias
+    type: rss
+    name: "Notícias do Dia"
+    enabled: true
+    feeds:
+      - url: "https://g1.globo.com/rss/g1/"
+        source_name: "G1"
+    max_items: 5
+
+  - id: youtube
+    type: youtube
+    name: "Vídeos do YouTube"
+    enabled: true
+    model: "gemini/gemini-3.1-flash-lite"
+    channels:
+      - id: UCaGmdJSSiR7fkh2A-c6emsA
+        name: "G1"
+    settings:
+      max_videos_per_channel: 1
+      max_videos_total: 8
+      days_lookback: 3
+      language_preference: [pt, en]
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# AGENDAMENTO
+# ═══════════════════════════════════════════════════════════════════════════════
+schedule:
+  - time: "07:00"
+    label: "Briefing Matinal"
+    sources: [noticias]
+    days: [mon, tue, wed, thu, fri]
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TELEGRAM — Perfil Personalizado
+# ═══════════════════════════════════════════════════════════════════════════════
+telegram:
+  perfil:
+    nome: Exemplo
+    interesses_primarios:
+      - tecnologia
+      - futebol
+      - fé
+      - economia
+    fontes_vip:
+      - G1
+    ignorar_sempre:
+      - fofoca e celebridades
+      - horóscopo
+    idioma_preferido: pt-BR
+    score_minimo_enviar: 5
+    max_cards_por_comando: 8
+
+  quotas:
+    briefing:
+      max_por_fonte: 3
+      max_total: 15
+    tech:
+      max_por_fonte: 3
+      max_total: 8
+    noticias:
+      max_por_fonte: 3
+      max_total: 8

@@ -1,0 +1,136 @@
+name: CD — Deploy em Produção
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (sem aplicar mudanças)"
+        required: false
+        default: "false"
+        type: boolean
+
+jobs:
+  ci-check:
+    name: "Verificar CI"
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    name: "Deploy em Produção"
+    runs-on: ubuntu-latest
+    needs: ci-check
+    environment: production
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar chave SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.GCLOUD_SSH_PRIVATE_KEY }}
+
+      - name: Adicionar servidor ao known_hosts
+        run: ssh-keyscan -H 34.24.139.45 >> ~/.ssh/known_hosts
+
+      - name: Sincronizar arquivos (rsync)
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        run: |
+          rsync -avz --delete \
+            --exclude='.git/' \
+            --exclude='.env' \
+            --exclude='.venv/' \
+            --exclude='__pycache__/' \
+            --exclude='*.pyc' \
+            --exclude='output/' \
+            --exclude='music/' \
+            --exclude='adaptive_state.json' \
+            --exclude='telegram_state.json' \
+            --exclude='*.json' \
+            --exclude='config.yaml' \
+            ./ \
+            rafaelnicodemrn@34.24.139.45:~/radioIA/
+
+      - name: Atualizar dependências no servidor
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        run: |
+          ssh rafaelnicodemrn@34.24.139.45 << 'EOF'
+            cd ~/radioIA
+            source .venv/bin/activate
+            pip install -r requirements.txt --quiet
+          EOF
+
+      - name: Health check pre-restart (compilacao)
+        run: |
+          ssh rafaelnicodemrn@34.24.139.45 << 'EOF'
+            cd ~/radioIA
+            source .venv/bin/activate
+            python -c "
+          import py_compile, glob, sys
+          files = glob.glob('src/**/*.py', recursive=True) + ['telegram_bot.py']
+          errors = []
+          for f in files:
+              try:
+                  py_compile.compile(f, doraise=True)
+              except py_compile.PyCompileError as e:
+                  errors.append(str(e))
+          if errors:
+              [print(e) for e in errors]
+              sys.exit(1)
+          print(f'OK: {len(files)} arquivos sem erros de compilacao')
+            "
+          EOF
+
+      - name: Restart do servico
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        run: |
+          ssh rafaelnicodemrn@34.24.139.45 \
+            "sudo systemctl restart radioia-bot && sleep 5 && sudo systemctl is-active radioia-bot"
+
+      - name: Health check pos-restart
+        run: |
+          ssh rafaelnicodemrn@34.24.139.45 << 'EOF'
+            STATUS=$(sudo systemctl is-active radioia-bot)
+            echo "Status: $STATUS"
+            if [ "$STATUS" != "active" ]; then
+              echo "ERRO: Servico nao esta ativo! Ultimas linhas do log:"
+              sudo journalctl -u radioia-bot -n 30 --no-pager
+              exit 1
+            fi
+            echo "OK: radioia-bot rodando em producao"
+            sudo journalctl -u radioia-bot -n 10 --no-pager
+          EOF
+
+  rollback:
+    name: "Rollback (acionado em falha de deploy)"
+    runs-on: ubuntu-latest
+    environment: production
+    if: failure()
+    needs: deploy
+
+    steps:
+      - name: Configurar chave SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.GCLOUD_SSH_PRIVATE_KEY }}
+
+      - name: Adicionar servidor ao known_hosts
+        run: ssh-keyscan -H 34.24.139.45 >> ~/.ssh/known_hosts
+
+      - name: Rollback para versao anterior
+        run: |
+          ssh rafaelnicodemrn@34.24.139.45 << 'EOF'
+            cd ~/radioIA
+            PREV_COMMIT=$(git log --format="%H" -2 | tail -1)
+            echo "Rollback para: $PREV_COMMIT"
+            git checkout $PREV_COMMIT -- .
+            source .venv/bin/activate
+            pip install -r requirements.txt --quiet
+            sudo systemctl restart radioia-bot
+            sleep 5
+            sudo systemctl is-active radioia-bot
+            echo "Rollback concluido"
+          EOF

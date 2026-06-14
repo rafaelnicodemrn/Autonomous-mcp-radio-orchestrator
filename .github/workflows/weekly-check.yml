@@ -1,0 +1,28 @@
+name: Verificacao Semanal de Dependencias
+
+on:
+  schedule:
+    - cron: "0 9 * * 1"  # Segunda-feira as 09:00 UTC
+  workflow_dispatch:
+
+jobs:
+  dependency-check:
+    name: "Dependencias Desatualizadas"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Verificar atualizacoes disponiveis
+        run: |
+          pip install pip-audit
+          pip install -r requirements.txt --quiet
+          echo "=== Pacotes desatualizados ==="
+          pip list --outdated
+          echo ""
+          echo "=== Auditoria de seguranca ==="
+          pip-audit -r requirements.txt || true
