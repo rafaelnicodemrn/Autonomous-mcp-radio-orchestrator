@@ -8,7 +8,7 @@ import logging
 import os
 import subprocess
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from datetime import time as dt_time
 from typing import Optional
 
@@ -1064,11 +1064,18 @@ def main():
         name="briefing_matinal",
     )
 
-    # Agendamento da análise semanal de aprendizado
-    job_queue.run_weekly(
+    # Agendamento da análise semanal de aprendizado (run_weekly removido no PTB v20+)
+    _now = datetime.now(timezone.utc)
+    _days_to_sunday = (6 - _now.weekday()) % 7
+    _next_sunday = _now.replace(hour=8, minute=0, second=0, microsecond=0) + timedelta(
+        days=_days_to_sunday
+    )
+    if _next_sunday <= _now:
+        _next_sunday += timedelta(weeks=1)
+    job_queue.run_repeating(
         weekly_analysis_job,
-        day_of_week="sun",
-        time=dt_time(8, 0, 0),
+        interval=timedelta(weeks=1),
+        first=_next_sunday,
         name="analise_semanal",
     )
 
