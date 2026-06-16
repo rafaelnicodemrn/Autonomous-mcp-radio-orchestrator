@@ -8,8 +8,9 @@ import logging
 import os
 import subprocess
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from datetime import time as dt_time
+from datetime import timedelta, timezone
 from typing import Optional
 
 # Windows event loop fix
@@ -32,16 +33,9 @@ from telegram.ext import (  # noqa: E402
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 from adaptive_engine import sync_youtube_signals  # noqa: E402
-from adaptive_engine import (  # noqa: E402
-    calculate_dynamic_weights,
-    format_learning_status,
-)
+from adaptive_engine import calculate_dynamic_weights, format_learning_status  # noqa: E402
 from adaptive_engine import load_state as load_adaptive_state  # noqa: E402
-from adaptive_engine import (  # noqa: E402
-    record_command_usage,
-    record_feedback,
-    run_weekly_analysis,
-)
+from adaptive_engine import record_command_usage, record_feedback, run_weekly_analysis  # noqa: E402
 from adaptive_engine import save_state as save_adaptive_state  # noqa: E402
 from content_enricher import deduplicate, enrich_item, score_item  # noqa: E402
 from profile_filter import (  # noqa: E402
@@ -726,7 +720,7 @@ async def cmd_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not items:
         await update.message.reply_text(
             "⚠️ Nenhum conteúdo gerado. Verifique se a URL é acessível."
-        )
+        )  # noqa: E501
         return
 
     record_command_usage("/url")
