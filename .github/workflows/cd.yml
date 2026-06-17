@@ -108,7 +108,7 @@ jobs:
     name: "Rollback (acionado em falha de deploy)"
     runs-on: ubuntu-latest
     environment: production
-    if: failure()
+    if: needs.deploy.result == 'failure'
     needs: deploy
 
     steps:
