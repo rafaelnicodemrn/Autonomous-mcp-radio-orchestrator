@@ -1,4 +1,6 @@
 import json
+from datetime import date, timedelta
+
 import pytest
 import src.history as history_mod
 
@@ -15,8 +17,11 @@ class TestLoadSeenIds:
         assert history_mod.load_seen_ids() == set()
 
     def test_returns_ids_from_existing_file(self, temp_history):
+        today = date.today().isoformat()
         with open(temp_history, 'w') as f:
-            json.dump({'seen_ids': ['id1', 'id2', 'id3'], 'episodes': []}, f)
+            json.dump(
+                {'seen_ids': {'id1': today, 'id2': today, 'id3': today}, 'episodes': []}, f
+            )
         assert history_mod.load_seen_ids() == {'id1', 'id2', 'id3'}
 
     def test_handles_missing_seen_ids_key(self, temp_history):
@@ -25,10 +30,23 @@ class TestLoadSeenIds:
         assert history_mod.load_seen_ids() == set()
 
     def test_returns_set_not_list(self, temp_history):
+        today = date.today().isoformat()
         with open(temp_history, 'w') as f:
-            json.dump({'seen_ids': ['id1'], 'episodes': []}, f)
+            json.dump({'seen_ids': {'id1': today}, 'episodes': []}, f)
         result = history_mod.load_seen_ids()
         assert isinstance(result, set)
+
+    def test_compativel_com_formato_antigo_lista(self, temp_history):
+        with open(temp_history, 'w') as f:
+            json.dump({'seen_ids': ['id1', 'id2'], 'episodes': []}, f)
+        assert history_mod.load_seen_ids() == {'id1', 'id2'}
+
+    def test_expira_ids_mais_antigos_que_ttl(self, temp_history):
+        expirado = (date.today() - timedelta(days=history_mod.SEEN_IDS_TTL_DAYS + 1)).isoformat()
+        recente = date.today().isoformat()
+        with open(temp_history, 'w') as f:
+            json.dump({'seen_ids': {'velho': expirado, 'novo': recente}, 'episodes': []}, f)
+        assert history_mod.load_seen_ids() == {'novo'}
 
 
 class TestSaveEpisodeToHistory:
@@ -60,7 +78,7 @@ class TestSaveEpisodeToHistory:
         history_mod.save_episode_to_history('ep2', [self._video('v1')])
         with open(temp_history) as f:
             data = json.load(f)
-        assert data['seen_ids'].count('v1') == 1
+        assert list(data['seen_ids'].keys()).count('v1') == 1
 
     def test_multiple_videos_per_episode(self, temp_history):
         videos = [self._video('v1'), self._video('v2'), self._video('v3')]
@@ -72,3 +90,19 @@ class TestSaveEpisodeToHistory:
         history_mod.save_episode_to_history('ep1', [self._video('v1')])
         fresh_seen = history_mod.load_seen_ids()
         assert 'v1' in fresh_seen
+
+    def test_grava_com_data_de_hoje(self, temp_history):
+        history_mod.save_episode_to_history('ep1', [self._video('v1')])
+        with open(temp_history) as f:
+            data = json.load(f)
+        assert data['seen_ids']['v1'] == date.today().isoformat()
+
+    def test_nao_perde_ids_recentes_ao_podar_expirados(self, temp_history):
+        expirado = (date.today() - timedelta(days=history_mod.SEEN_IDS_TTL_DAYS + 1)).isoformat()
+        with open(temp_history, 'w') as f:
+            json.dump({'seen_ids': {'velho': expirado}, 'episodes': []}, f)
+        history_mod.save_episode_to_history('ep1', [self._video('v1')])
+        with open(temp_history) as f:
+            data = json.load(f)
+        assert 'velho' not in data['seen_ids']
+        assert 'v1' in data['seen_ids']

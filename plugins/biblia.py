@@ -22,11 +22,13 @@ Obtenha seu token gratuito em: https://www.abibliadigital.com.br/pt
 """
 
 import os
+import json
 import hashlib
 import requests
 from datetime import date
 
 BIBLE_API = "https://www.abibliadigital.com.br/api"
+CACHE_PATH = "biblia_cache.json"
 
 _BOOKS_PT = {
     # Antigo Testamento
@@ -124,6 +126,41 @@ def _parse_verse(data: dict, fallback_abbrev: str, source_config: dict) -> dict 
     }
 
 
+def _cache_key(version: str, mode: str, settings: dict) -> str:
+    today = date.today().isoformat()
+    book = str(settings.get("book", "")) if mode == "book" else ""
+    return f"{today}-{version}-{mode}-{book}"
+
+
+def _load_cached_items(key: str) -> list[dict] | None:
+    """Lê itens cacheados para a chave do dia (evita versículo diferente a
+    cada chamada do comando — 'Palavra do Dia' deve ser fixa por dia)."""
+    if not os.path.exists(CACHE_PATH):
+        return None
+    try:
+        with open(CACHE_PATH, "r", encoding="utf-8") as f:
+            cache = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return None
+    return cache.get(key)
+
+
+def _save_cached_items(key: str, items: list[dict]):
+    cache = {}
+    if os.path.exists(CACHE_PATH):
+        try:
+            with open(CACHE_PATH, "r", encoding="utf-8") as f:
+                cache = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            cache = {}
+    # Mantém só a entrada de hoje: chaves de dias anteriores não servem mais.
+    today = date.today().isoformat()
+    cache = {k: v for k, v in cache.items() if k.startswith(today)}
+    cache[key] = items
+    with open(CACHE_PATH, "w", encoding="utf-8") as f:
+        json.dump(cache, f, ensure_ascii=False, indent=2)
+
+
 def fetch(source_config: dict, credentials=None) -> list[dict]:
     settings  = source_config.get('settings') or {}
     token     = _get_token(settings)
@@ -135,6 +172,16 @@ def fetch(source_config: dict, credentials=None) -> list[dict]:
 
     if not token:
         print("  [biblia] aviso: sem token — usando limite de 20 req/hora.")
+
+    # Modos 'random'/'book' não são determinísticos na API — sem cache, cada
+    # chamada do dia (manual ou automática) sorteia um versículo diferente,
+    # gerando "Palavra do Dia" duplicada e inconsistente no mesmo dia.
+    cache_key = None
+    if mode in ('random', 'book'):
+        cache_key = _cache_key(version, mode, settings)
+        cached = _load_cached_items(cache_key)
+        if cached is not None:
+            return cached[:max_items]
 
     try:
         if mode == 'passage':
@@ -192,5 +239,8 @@ def fetch(source_config: dict, credentials=None) -> list[dict]:
         print(f"  [biblia] erro de conexão: {e}")
     except Exception as e:
         print(f"  [biblia] erro inesperado: {e}")
+
+    if cache_key and items:
+        _save_cached_items(cache_key, items)
 
     return items

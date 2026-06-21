@@ -101,6 +101,10 @@ def _extract_bullets(text: str, max_bullets: int = 3) -> list:
 def _source_tags(source_id: str, source_name: str) -> str:
     """Gera hashtags baseadas na fonte."""
     tags = []
+    # source_id usa hífen como separador de palavras (ex: "inteligencia-artificial");
+    # comparar contra os tokens em vez de substring evita falsos positivos como
+    # "ia" casando dentro de "biblia".
+    tokens = set(source_id.lower().split("-"))
     sid = source_id.lower().replace("-", "")
     if "catolicismo" in sid or "biblia" in sid:
         tags += ["#catolicismo"]
@@ -108,7 +112,7 @@ def _source_tags(source_id: str, source_name: str) -> str:
         tags += ["#conservadorismo"]
     if "gremio" in sid or "brasileirao" in sid or "copa" in sid or "libertadores" in sid:
         tags += ["#futebol"]
-    if "tech" in sid or "tecnologia" in sid or "ia" in sid or "inteligencia" in sid:
+    if "tech" in sid or "tecnologia" in sid or "ia" in tokens or "inteligencia" in sid:
         tags += ["#tecnologia"]
     if "noticias" in sid:
         tags += ["#noticias"]
@@ -267,16 +271,16 @@ async def send_briefing_header(
         "━" * 20,
     ]
 
+    # weather_text/finance_text/verse já vêm com seu próprio emoji
+    # (src/weather.py e src/data/versiculos.py) — não duplicar aqui.
     if weather_text:
-        lines.append(f"🌡️ {_escape_html(weather_text)}")
+        lines.append(_escape_html(weather_text))
 
     if finance_text:
-        lines.append(f"💵 {_escape_html(finance_text)}")
+        lines.append(_escape_html(finance_text))
 
     if verse:
-        lines.append("")
-        lines.append("✝️ <b>Palavra do Dia</b>")
-        lines.append(f"<i>{_escape_html(verse)}</i>")
+        lines.append(_escape_html(verse))
 
     text = "\n".join(lines)
 

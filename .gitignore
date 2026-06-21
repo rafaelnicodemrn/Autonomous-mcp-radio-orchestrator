@@ -16,6 +16,7 @@ music/
 history.json
 adaptive_state.json
 telegram_state.json
+biblia_cache.json
 
 # ── Testes e cobertura ────────────────────────────────────────────────────────
 .pytest_cache/

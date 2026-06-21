@@ -56,6 +56,15 @@ def _default_profile() -> dict:
             "esportes olímpicos",
             "fofoca e celebridades",
             "loteria",
+            "quina",
+            "mega-sena",
+            "megasena",
+            "lotofácil",
+            "lotofacil",
+            "lotomania",
+            "dupla sena",
+            "timemania",
+            "dia de sorte",
             "horóscopo",
             "reality show",
         ],
@@ -223,18 +232,27 @@ def filter_and_score_items(items: list, profile: dict) -> list:
             gemini_score = item.get("_score", 5)
             source_name = item.get("source_name", "")
 
+            item["_llm_score"] = gemini_score
             item["_score"] = compute_adaptive_score(item, gemini_score, adaptive_state)
 
             if source_name:
                 update_source_reputation(source_name, gemini_score, adaptive_state)
 
         save_state(adaptive_state)
-    except Exception as e:
-        logger.debug(f"[adaptive] não foi possível recalcular score: {e}")
+    except Exception:
+        logger.exception("[adaptive] não foi possível recalcular score — usando score do Gemini")
 
-    # 5. Filtra por score mínimo
+    # 5. Filtra por score mínimo. O bônus de recência do motor adaptativo
+    # pode, por si só, empurrar um item irrelevante (mas recente) acima do
+    # threshold — por isso também exige que a relevância pura do Gemini não
+    # esteja muito abaixo do mínimo configurado.
     min_score = profile.get("score_minimo_enviar", 5)
-    filtered_by_score = [i for i in enriched if i["_score"] >= min_score]
+    min_llm_score = max(0, min_score - 2)
+    filtered_by_score = [
+        i
+        for i in enriched
+        if i["_score"] >= min_score and i.get("_llm_score", min_score) >= min_llm_score
+    ]
 
     # 6. Ordena por score decrescente
     filtered_by_score.sort(key=lambda x: x["_score"], reverse=True)

@@ -12,6 +12,7 @@ from datetime import datetime
 from datetime import time as dt_time
 from datetime import timedelta, timezone
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 # Windows event loop fix
 if sys.platform == "win32":
@@ -37,7 +38,9 @@ from adaptive_engine import calculate_dynamic_weights, format_learning_status  #
 from adaptive_engine import load_state as load_adaptive_state  # noqa: E402
 from adaptive_engine import record_command_usage, record_feedback, run_weekly_analysis  # noqa: E402
 from adaptive_engine import save_state as save_adaptive_state  # noqa: E402
+from content_enricher import _gemini_call_with_retry  # noqa: E402
 from content_enricher import deduplicate, enrich_item, score_item  # noqa: E402
+from data.versiculos import format_verse_of_day  # noqa: E402
 from profile_filter import (  # noqa: E402
     filter_and_score_items,
     format_help,
@@ -45,6 +48,7 @@ from profile_filter import (  # noqa: E402
     load_profile,
     save_profile,
 )
+from telegram_sender import _escape_html  # noqa: E402
 from telegram_sender import (  # noqa: E402
     send_audio,
     send_briefing_header,
@@ -52,6 +56,7 @@ from telegram_sender import (  # noqa: E402
     send_section_header,
     send_text,
 )
+from weather import get_exchange_rate, get_weather_summary  # noqa: E402
 
 # Modelos Gemini — estratégia de dois níveis
 MODEL_FILTER = "gemini/gemini-2.5-flash-lite"  # filtragem/scoring (barato, alto volume)
@@ -71,6 +76,7 @@ MAX_SENT_IDS = 500
 MAX_ITEMS_PER_CATEGORY = 3
 BRIEFING_HOUR = 7
 BRIEFING_MINUTE = 0
+BRIEFING_TZ = ZoneInfo("America/Sao_Paulo")
 
 BRIEFING_SOURCES = [
     "biblia",
@@ -232,7 +238,21 @@ async def _wait_and_collect(proc, sources: list, timeout: int = 300) -> list:
     except asyncio.TimeoutError:
         proc.kill()
         logger.warning("[wait_and_collect] timeout — processo encerrado")
-    return _collect_from_episode_json(sources)
+
+    items = _collect_from_episode_json(sources)
+    if not items:
+        # Sem itens: loga a saída do main.py para diagnosticar a causa real
+        # (ex: "Nenhum conteudo novo encontrado" por dedup, erro de fonte, etc.)
+        try:
+            stdout, stderr = proc.communicate(timeout=5)
+        except Exception:
+            stdout, stderr = b"", b""
+        if stdout:
+            logger.warning(f"[wait_and_collect] main.py stdout:\n{stdout.decode(errors='replace')}")
+        if stderr:
+            logger.warning(f"[wait_and_collect] main.py stderr:\n{stderr.decode(errors='replace')}")
+        logger.warning(f"[wait_and_collect] main.py exit code: {proc.returncode}")
+    return items
 
 
 def load_quotas(cmd_key: str = None) -> dict:
@@ -315,6 +335,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/youtube — Vídeos do YouTube (canais configurados)\n\n"
         "/perfil — Ver e editar seu perfil de interesses\n"
         "/url &lt;link&gt; — Episódio de URL avulsa\n"
+        "/resumo — Resumo executivo do dia em uma mensagem\n"
         "/historico — Episódios de hoje\n"
         "/status — Status e próximo briefing\n"
         "/aprendizado — Status do aprendizado adaptativo\n"
@@ -505,6 +526,61 @@ async def cmd_config(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lines.append(f"• {nome}: {round(peso * 100)}%")
 
     await update.message.reply_text("\n".join(lines), parse_mode="HTML")
+
+
+def _build_resumo_prompt(items: list, profile: dict) -> str:
+    interesses = ", ".join(profile.get("interesses_primarios", []))
+    linhas = []
+    for item in items[:25]:
+        titulo = str(item.get("title", ""))[:120]
+        fonte = str(item.get("source_name", ""))
+        linhas.append(f"- [{fonte}] {titulo}")
+    lista = "\n".join(linhas)
+
+    return (
+        "Você é o assistente pessoal de notícias do Rafael.\n"
+        f"Perfil de interesses dele: {interesses}.\n\n"
+        "Com base nos itens abaixo, escreva um resumo executivo do dia em "
+        "5 a 8 linhas, tom direto, em português do Brasil, cobrindo os "
+        "principais pontos relevantes ao perfil dele. Não use markdown, "
+        "apenas texto corrido em parágrafos curtos.\n\n"
+        f"Itens do dia:\n{lista}"
+    )
+
+
+async def cmd_resumo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Comando /resumo — resumo executivo do dia em uma única mensagem."""
+    record_command_usage("/resumo")
+
+    items = _collect_from_episode_json([])
+    if not items:
+        await update.message.reply_text(
+            "⏳ Nenhum conteúdo gerado hoje ainda — coletando agora...\nAguarde alguns instantes."
+        )
+        proc = _run_main_py(BRIEFING_SOURCES)
+        items = await _wait_and_collect(proc, BRIEFING_SOURCES, timeout=360)
+
+    data_str = datetime.now().strftime("%d/%m/%Y")
+
+    if not items:
+        await update.message.reply_text(
+            f"📋 <b>Resumo do dia — {data_str}</b>\n\n"
+            "⚠️ Nenhum conteúdo disponível hoje para resumir.",
+            parse_mode="HTML",
+        )
+        return
+
+    profile = load_profile()
+    prompt = _build_resumo_prompt(items, profile)
+
+    try:
+        resumo = _gemini_call_with_retry(prompt, MODEL_GENERATE, 500).strip()
+    except Exception as e:
+        logger.warning(f"[resumo] erro ao gerar resumo: {e}")
+        resumo = "⚠️ Não foi possível gerar o resumo agora. Tente novamente em alguns instantes."
+
+    text = f"📋 <b>Resumo do dia — {data_str}</b>\n\n{_escape_html(resumo)}"
+    await update.message.reply_text(text, parse_mode="HTML")
 
 
 async def weekly_analysis_job(context: ContextTypes.DEFAULT_TYPE):
@@ -925,8 +1001,15 @@ async def send_morning_briefing(context: ContextTypes.DEFAULT_TYPE):
     # Gera conteúdo
     proc = _run_main_py(BRIEFING_SOURCES)
 
-    # Envia header enquanto gera
-    await send_briefing_header(context.bot, chat_id)
+    # Envia header enquanto gera (clima/cotação/versículo nunca bloqueiam o
+    # briefing — qualquer falha já é tratada dentro de cada função, retornando
+    # string vazia, e send_briefing_header simplesmente omite a linha)
+    weather_text = get_weather_summary()
+    finance_text = get_exchange_rate()
+    verse_text = format_verse_of_day()
+    await send_briefing_header(
+        context.bot, chat_id, weather_text=weather_text, finance_text=finance_text, verse=verse_text
+    )
 
     # Aguarda geração
     items = await _wait_and_collect(proc, BRIEFING_SOURCES, timeout=600)
@@ -1038,6 +1121,7 @@ def main():
     app.add_handler(CommandHandler("analise", cmd_analise))
     app.add_handler(CommandHandler("sincronia", cmd_sincronia))
     app.add_handler(CommandHandler("config", cmd_config))
+    app.add_handler(CommandHandler("resumo", cmd_resumo))
 
     # Comandos de geração dinâmicos
     for cmd, sources in COMMANDS.items():
@@ -1054,7 +1138,7 @@ def main():
     job_queue = app.job_queue
     job_queue.run_daily(
         send_morning_briefing,
-        time=dt_time(BRIEFING_HOUR, BRIEFING_MINUTE, 0),
+        time=dt_time(BRIEFING_HOUR, BRIEFING_MINUTE, 0, tzinfo=BRIEFING_TZ),
         name="briefing_matinal",
     )
 

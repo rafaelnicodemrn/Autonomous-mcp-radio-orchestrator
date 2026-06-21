@@ -69,7 +69,11 @@ def fetch(source_config: dict, credentials=None) -> list[dict]:
                     "text": text,
                     "source_name": feed_name,
                     "source_type": "news",
-                    "published_at": (published or datetime.now(timezone.utc)).isoformat(),
+                    # Sem data confiável: deixa em branco (recência neutra) em vez
+                    # de fingir que é "agora" — item sem published_parsed pode ser
+                    # antigo e, fabricando a data, escaparia do filtro de cutoff
+                    # e ainda ganharia bônus de recência máximo indevidamente.
+                    "published_at": published.isoformat() if published else "",
                     "views": 0,
                     "comments": [],
                     "channel": feed_name,

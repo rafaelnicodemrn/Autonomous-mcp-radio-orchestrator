@@ -67,3 +67,47 @@ class TestFilterAndScoreItems:
 
         assert all("_score" in i for i in result)
         assert all("horóscopo" not in i["title"].lower() for i in result)
+
+    def test_estado_frio_nao_zera_itens_relevantes(
+        self, sample_config, empty_adaptive_state, monkeypatch
+    ):
+        """
+        Reproduz o estado de um sistema recém-colocado em produção: zero
+        feedback, zero reputação de fontes, zero vetor de interesses do
+        YouTube (DEFAULT_STATE). Itens bem avaliados pelo Gemini e
+        publicados hoje devem passar pelo pipeline normalmente — sem isso,
+        o briefing matinal fica vazio na primeira execução real.
+        """
+        from datetime import date
+
+        profile = sample_config["perfil"]
+        hoje = date.today().isoformat()
+        items = [
+            {
+                "title": "Avanço importante em inteligência artificial",
+                "source_name": "G1",
+                "text": "",
+                "published_at": hoje,
+            },
+            {
+                "title": "Reflexão sobre fé e tradição católica",
+                "source_name": "Vatican News",
+                "text": "",
+                "published_at": hoje,
+            },
+        ]
+
+        fake_response = json.dumps(
+            [
+                {"i": 1, "score": 8, "motivo": "tecnologia"},
+                {"i": 2, "score": 8, "motivo": "fé"},
+            ]
+        )
+        monkeypatch.setattr(content_enricher, "_gemini_call_with_retry", lambda *a, **k: fake_response)
+        monkeypatch.setattr(adaptive_engine, "load_state", lambda: empty_adaptive_state)
+        monkeypatch.setattr(adaptive_engine, "save_state", lambda s: None)
+
+        result = profile_filter.filter_and_score_items(items, profile)
+
+        assert len(result) == 2
+        assert all(i["_score"] >= profile["score_minimo_enviar"] for i in result)
