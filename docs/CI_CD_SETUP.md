@@ -137,6 +137,19 @@ associe a chave ao usuário correto. Ao gerar uma nova chave dedicada para
 o GitHub Actions, usar sempre `-C rafaelnicodemrn` (o usuário SSH de
 destino), nunca um nome descritivo do propósito da chave.
 
+## 5.1. Plano de incremento de cobertura de testes
+
+Cobertura atual (`--cov-fail-under` em `pytest.ini`): **24%** (medido em
+22/06/2026, 122 testes). Meta de longo prazo: 60%.
+
+Estratégia: subir `--cov-fail-under` em pequenos incrementos a cada nova
+feature implementada (+5-10% por sprint), nunca para um valor acima do que
+foi de fato medido com `pytest tests/ --cov=src --cov=telegram_bot
+--cov-report=term-missing`. Módulos prioritários para os próximos
+incrementos (maior espaço para ganho com esforço razoável de mock):
+`src/sources/youtube.py`, `src/sources/utility.py`, `src/script_generator.py`
+e os handlers de comando ainda não testados em `telegram_bot.py`.
+
 ## 6. Validação pós-setup
 
 1. Abrir um PR de `feature/*` para `develop` (ou `main`) e confirmar que o
