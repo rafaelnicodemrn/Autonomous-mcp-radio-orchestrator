@@ -96,6 +96,18 @@ itens resultantes.
 >
 > (cards do conteúdo extraído, com botões 👍/👎)
 
+### `/resumo`
+Gera um resumo executivo do dia em **uma única mensagem**, sintetizado pelo
+Gemini a partir dos itens já coletados hoje (ou de uma coleta rápida, se
+ainda não houver nada gerado).
+
+```
+/resumo
+```
+> 📋 **Resumo do dia — 21/06/2026**
+>
+> (resumo de 5-8 linhas em texto corrido, sem cards)
+
 ### `/aprendizado`
 Mostra o status do motor de aprendizado adaptativo
 (`format_learning_status`). Ver [ADAPTIVE_SYSTEM.md](ADAPTIVE_SYSTEM.md).
