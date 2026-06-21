@@ -26,7 +26,9 @@ reboot.
   por `GOOGLE_APPLICATION_CREDENTIALS`).
 - (Opcional) `credentials.json` + `token.json` para OAuth do YouTube — sem
   eles, `/sincronia` e a busca por inscrições ficam desabilitados, mas o
-  restante do bot funciona normalmente (graceful degradation).
+  restante do bot funciona normalmente (graceful degradation). Gerar e
+  publicar com `python authenticate_and_deploy.py` rodado localmente (nunca
+  no servidor — ver [TROUBLESHOOTING.md](TROUBLESHOOTING.md#invalid_grant-missing-code-verifier-ao-tentar-autenticar-no-servidor)).
 
 ## Setup inicial
 

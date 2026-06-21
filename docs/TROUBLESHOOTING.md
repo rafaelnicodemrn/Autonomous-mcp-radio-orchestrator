@@ -35,9 +35,38 @@ expirado sem refresh token válido. Nesse caso:
   [ADAPTIVE_SYSTEM.md](ADAPTIVE_SYSTEM.md#graceful-degradation)).
 
 **Fix**: gerar `credentials.json` (OAuth client do Google Cloud Console,
-tipo "Desktop app", com a YouTube Data API v3 habilitada) e rodar o fluxo de
-autorização local para gerar `token.json`. Sem isso, o sistema funciona, mas
-o sinal `youtube` do motor adaptativo permanece neutro/zerado.
+tipo "Web" ou "Desktop", com a YouTube Data API v3 habilitada) e rodar
+`python authenticate_and_deploy.py` **na sua máquina local** (nunca no
+servidor — ver `### "invalid_grant: Missing code verifier"` abaixo). Sem
+isso, o sistema funciona, mas o sinal `youtube` do motor adaptativo
+permanece neutro/zerado.
+
+### `invalid_grant: Missing code verifier` ao tentar autenticar no servidor
+
+O fluxo OAuth com PKCE gera a URL de consentimento e troca o código de
+autorização pelo token **no mesmo processo** — o `code_verifier` fica em
+memória nesse processo. Rodar `run_local_server()` num servidor headless
+(sem browser, sem porta acessível) e tentar completar o fluxo manualmente
+(ex: copiando a URL para abrir no navegador local e colando o código de
+volta) quebra essa premissa: o processo que troca o código não é o mesmo
+que gerou o `code_verifier`, daí o erro.
+
+**Fix**: nunca autenticar no servidor. `src/auth.py::get_youtube_credentials()`
+só lê e renova `token.json` — não inicia mais nenhum fluxo interativo. Para
+gerar/renovar o token:
+
+```bash
+# Na sua máquina local, com credentials.json na raiz do projeto e o
+# gcloud CLI autenticado (gcloud auth login):
+python authenticate_and_deploy.py
+```
+
+O script abre o browser local para o consentimento, salva `token.json`,
+copia para o servidor via `gcloud compute scp` e reinicia o `radioia-bot`
+via `gcloud compute ssh` — tudo em um comando. Use `--skip-restart` se só
+quiser atualizar o token sem reiniciar o serviço. Detalhes de instância/zone
+em `authenticate_and_deploy.py` (padrão: projeto `gen-lang-client-0103774511`,
+instância `radioia-server`, zone `us-east1-b`).
 
 ## Erros do Gemini (timeout, rate limit, resposta inválida)
 
