@@ -116,6 +116,27 @@ Depois, reexecute o workflow `cd.yml` (ex.: `gh workflow run cd.yml --ref main`
 ou um novo push em `main`) e confirme que o passo "Configurar chave SSH"
 passa.
 
+### Causa raiz definitiva do "Permission denied" recorrente
+
+O erro de libcrypto acima é só um dos sintomas. A causa raiz real do
+`Permission denied` recorrente no `cd.yml` (mesmo com a chave privada
+válida no secret) é o **comentário da chave pública**: o GCP guest-agent
+usa o comentário final da chave (formato `tipo chave-base64 COMENTARIO`)
+como nome do usuário Linux ao aplicá-la via metadata SSH keys do Console.
+
+Como a chave gerada tinha o comentário `github-actions-radioia` (ver
+comando do passo anterior, `-C github-actions-radioia`), o guest-agent
+criou um usuário Linux **novo** chamado `github-actions-radioia` e gravou
+a chave pública no `authorized_keys` *desse* usuário — não no de
+`rafaelnicodemrn`, que é o usuário que o `cd.yml` usa para conectar via
+SSH. A chave estava correta e válida, só estava no lugar errado.
+
+**Correção:** trocar o comentário da chave pública para `rafaelnicodemrn`
+no Console do GCP (Metadata > SSH Keys), garantindo que o guest-agent
+associe a chave ao usuário correto. Ao gerar uma nova chave dedicada para
+o GitHub Actions, usar sempre `-C rafaelnicodemrn` (o usuário SSH de
+destino), nunca um nome descritivo do propósito da chave.
+
 ## 6. Validação pós-setup
 
 1. Abrir um PR de `feature/*` para `develop` (ou `main`) e confirmar que o
