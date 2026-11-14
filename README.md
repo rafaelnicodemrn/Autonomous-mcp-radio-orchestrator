@@ -1,5 +1,7 @@
 # RadioIA 📻
 
+![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white) ![Claude](https://img.shields.io/badge/Claude-roteiros-D97757) ![MCP](https://img.shields.io/badge/MCP-server-black) ![License](https://img.shields.io/badge/license-MIT-green)
+
 Rádio personalizada gerada por inteligência artificial. O sistema coleta conteúdo de diversas fontes (YouTube, RSS, Reddit, APIs públicas), gera roteiros com Claude e produz episódios em MP3 narrados por vozes sintéticas — tudo automaticamente.
 
 ---
